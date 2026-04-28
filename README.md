@@ -1,11 +1,35 @@
 
-  # Clueless app landing page
+# Clueless
 
-  This is a code bundle for Clueless app landing page. The original project is available at https://www.figma.com/design/3HtSDiVvGA6xZadJuRTuZs/Clueless-app-landing-page.
+Clueless is now a Next.js full-stack TypeScript app with:
 
-  ## Running the code
+- Next.js 16 App Router frontend
+- API routes under `/api` for chat, try-on, and weather
+- OpenAI/Gemini integration for stylist chat
+- Replicate integration for virtual try-on
+- Weather-aware recommendations via Open-Meteo
+- Vercel-ready deployment (`vercel.json`)
 
-  Run `npm i` to install the dependencies.
+## Local development
 
-  Run `npm run dev` to start the development server.
+1. Install dependencies:
+
+```bash
+pnpm install
+```
+
+2. Create a `.env.local` file (see `.env.example`).
+
+3. Run the app:
+
+```bash
+pnpm dev
+```
+
+## Environment variables
+
+- `AI_PROVIDER` (`openai` or `gemini`)
+- `OPENAI_API_KEY`
+- `GEMINI_API_KEY`
+- `REPLICATE_API_TOKEN`
   
