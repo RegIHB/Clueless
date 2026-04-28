@@ -1,6 +1,9 @@
+ 'use client';
+
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera } from 'lucide-react';
+import Image from 'next/image';
 import { ClothingIcon } from './components/ClothingIcon';
 import { ClothingSticker } from './components/ClothingSticker';
 import { ChatInterface } from './components/ChatInterface';
@@ -8,7 +11,7 @@ import { OnboardingFlow } from './components/OnboardingFlow';
 import { UploadFlow } from './components/UploadFlow';
 import { EmptyState } from './components/EmptyState';
 import { SelfieUpload } from './components/SelfieUpload';
-import baseModelImg from '../imports/e2e98591acf7adab2d1ed29f0beb1df9.png';
+import { getGarmentImage } from '@/lib/garment-images';
 
 type WardrobeCategory = 'tops' | 'bottoms' | 'accessories';
 
@@ -44,6 +47,9 @@ export default function App() {
   }>>([]);
   const [currentView, setCurrentView] = useState<'wardrobe' | 'outfits'>('wardrobe');
   const [currentPage, setCurrentPage] = useState(0);
+  const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
+  const [tryOnImageUrl, setTryOnImageUrl] = useState<string | null>(null);
+  const baseModelImg = 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1200&q=80';
   const itemsPerPage = 6;
   const userName = "Alex";
 
@@ -89,6 +95,25 @@ export default function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const fetchWeather = async () => {
+      try {
+        const response = await fetch(`/api/weather?city=${encodeURIComponent(location)}`);
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (payload?.weather?.tempC && payload?.weather?.condition) {
+          setWeather({
+            temp: payload.weather.tempC,
+            condition: payload.weather.condition,
+          });
+        }
+      } catch {
+        // Keep default weather if API is unavailable.
+      }
+    };
+    void fetchWeather();
+  }, [location]);
+
   // Prompt for selfie if not uploaded and wardrobe has items
   useEffect(() => {
     if (isLoggedIn && !userSelfie && wardrobeItems.length > 0 && hasCompletedOnboarding) {
@@ -107,6 +132,7 @@ export default function App() {
 
   const handleSelfieUpload = (imageUrl: string) => {
     setUserSelfie(imageUrl);
+    setTryOnImageUrl(null);
     localStorage.setItem('userSelfie', imageUrl);
     setShowSelfieUpload(false);
     showToast('Profile photo uploaded!');
@@ -138,6 +164,48 @@ export default function App() {
     };
     setWardrobeItems(prev => [...prev, newItem]);
     showToast(`${item.type} added to wardrobe!`);
+  };
+
+  const handleTryOn = async () => {
+    if (!userSelfie) {
+      showToast('Upload your photo first', 'error');
+      return;
+    }
+    const selectedGarment = selectedOutfit.tops ?? selectedOutfit.bottoms ?? selectedOutfit.accessories;
+    if (!selectedGarment) {
+      showToast('Select at least one outfit item', 'error');
+      return;
+    }
+
+    try {
+      setIsGeneratingTryOn(true);
+      const response = await fetch('/api/try-on', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personImageUrl: userSelfie,
+          garmentImageUrl: getGarmentImage(selectedGarment.type),
+          prompt: `Virtual try-on with ${selectedGarment.type}`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Try-on request failed');
+      }
+      const payload = await response.json();
+      const output = payload?.output;
+      const generated = Array.isArray(output) ? output[0] : output;
+      if (typeof generated === 'string' && generated.length > 0) {
+        setTryOnImageUrl(generated);
+        showToast('Try-on generated');
+      } else {
+        showToast('Try-on completed but no image was returned', 'error');
+      }
+    } catch {
+      showToast('Try-on failed. Confirm REPLICATE_API_TOKEN is configured.', 'error');
+    } finally {
+      setIsGeneratingTryOn(false);
+    }
   };
 
   const getCategoryItems = (category: WardrobeCategory) => {
@@ -467,7 +535,7 @@ export default function App() {
               AI-POWERED OUTFIT RECOMMENDATIONS
             </h2>
             <p className="max-w-[700px] mx-auto mb-8" style={{ fontSize: '15px', lineHeight: 1.7, fontWeight: 500 }}>
-              Just tell us what you're doing today. Our AI considers your location, weather, personal style, and occasion to suggest the perfect outfit.
+              Just tell us what you&apos;re doing today. Our AI considers your location, weather, personal style, and occasion to suggest the perfect outfit.
             </p>
           </motion.div>
 
@@ -482,7 +550,7 @@ export default function App() {
               {
                 icon: <Sparkles className="w-6 h-6" strokeWidth={2.5} />,
                 title: 'SMART STYLING',
-                description: "AI learns your style from saved outfits and suggests looks you'll love"
+                description: "AI learns your style from saved outfits and suggests looks you&apos;ll love"
               },
               {
                 icon: <MessageCircle className="w-6 h-6" strokeWidth={2.5} />,
@@ -839,9 +907,11 @@ export default function App() {
                       </div>
                     ) : (
                       /* Show user's selfie */
-                      <img
-                        src={userSelfie}
+                      <Image
+                        src={tryOnImageUrl || userSelfie}
                         alt="Your photo"
+                        fill
+                        unoptimized
                         className="w-full h-full object-cover object-center"
                       />
                     )}
@@ -936,6 +1006,22 @@ export default function App() {
                   </div>
 
                   <div className="space-y-2">
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleTryOn}
+                      disabled={isGeneratingTryOn || !userSelfie || (!selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.accessories)}
+                      className="w-full py-3 px-4 rounded-full text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        background: '#000',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        letterSpacing: '0.1em'
+                      }}
+                    >
+                      {isGeneratingTryOn ? 'GENERATING TRY-ON...' : 'RUN AI TRY-ON'}
+                    </motion.button>
+
                     <motion.button
                       whileHover={{ scale: 1.02, y: -1 }}
                       whileTap={{ scale: 0.98 }}
@@ -1041,9 +1127,11 @@ export default function App() {
                         }}
                       >
                         <div className="aspect-square bg-gradient-to-b from-gray-100 to-gray-200 rounded-xl mb-4 relative overflow-hidden">
-                          <img
+                          <Image
                             src={userSelfie || baseModelImg}
                             alt="Model"
+                            fill
+                            unoptimized
                             className="w-full h-full object-cover object-center"
                           />
                           {outfit.bottoms && (
@@ -1175,9 +1263,11 @@ export default function App() {
                 border: '3px solid #000',
                 boxShadow: '8px 8px 0 #000'
               }}>
-                <img
+                <Image
                   src="https://images.unsplash.com/photo-1567113463300-102a7eb3cb26?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwd2FyZHJvYmUlMjBjbG9zZXQlMjBmYXNoaW9ufGVufDF8fHx8MTc3NjA3OTMyN3ww&ixlib=rb-4.1.0&q=80&w=1080"
                   alt="Wardrobe visualization"
+                  fill
+                  unoptimized
                   className="w-full h-full object-cover rounded-2xl"
                 />
               </div>

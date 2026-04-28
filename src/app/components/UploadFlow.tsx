@@ -76,7 +76,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               className="space-y-6"
             >
               <p style={{ fontSize: '15px', fontWeight: 500, lineHeight: 1.6, marginBottom: '24px' }}>
-                Choose how you'd like to add your clothing item:
+                Choose how you&apos;d like to add your clothing item:
               </p>
 
               <button
