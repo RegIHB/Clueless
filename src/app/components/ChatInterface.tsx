@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Sparkles, MapPin, Cloud } from 'lucide-react';
+import { buildFallbackSuggestion } from '@/lib/outfit-fallback';
 
 interface Message {
   id: string;
@@ -31,12 +32,13 @@ export function ChatInterface({ onClose, location, weather }: ChatInterfaceProps
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const handleSend = async () => {
-    if (!input.trim()) return;
+    const messageText = input.trim();
+    if (!messageText) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: input
+      content: messageText
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -48,7 +50,7 @@ export function ChatInterface({ onClose, location, weather }: ChatInterfaceProps
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: input,
+          message: messageText,
           location,
           weather
         })
@@ -67,18 +69,14 @@ export function ChatInterface({ onClose, location, weather }: ChatInterfaceProps
       };
       setMessages(prev => [...prev, assistantMessage]);
     } catch {
+      const offline = buildFallbackSuggestion(messageText, weather.temp, weather.condition);
       setMessages(prev => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: "I couldn't reach the stylist backend, so here's a quick recommendation: start with TT-04 and BD-04, then layer with WJ-02 if it gets cold.",
-          outfitSuggestion: {
-            tops: ['TT-04', 'WJ-02'],
-            bottoms: ['BD-04'],
-            accessories: ['AC-03'],
-            reason: 'Fallback styling suggestion while backend is unavailable.'
-          }
+          content: `${offline.reason} (Couldn't reach the server—showing a local suggestion.) The picks below match your message and weather.`,
+          outfitSuggestion: offline
         }
       ]);
     } finally {

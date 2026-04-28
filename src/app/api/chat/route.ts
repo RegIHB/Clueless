@@ -19,23 +19,43 @@ async function callOpenAI(prompt: string): Promise<ProviderResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
 
+  const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
   const client = new OpenAI({ apiKey });
-  const completion = await client.responses.create({
-    model: "gpt-4.1-mini",
-    input: prompt,
+  const completion = await client.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are an AI fashion stylist. Give concise, practical outfit advice for the user's plans and weather. No markdown headings.",
+      },
+      { role: "user", content: prompt },
+    ],
+    max_completion_tokens: 500,
   });
 
-  const reply = completion.output_text?.trim();
+  const reply = completion.choices[0]?.message?.content?.trim();
   if (!reply) throw new Error("OpenAI response empty");
   return { reply };
+}
+
+function resolveAiProvider(): "openai" | "gemini" {
+  const explicit = process.env.AI_PROVIDER?.trim().toLowerCase();
+  if (explicit === "openai" || explicit === "gemini") return explicit;
+  // If only one key is set, use that provider (typical for Gemini free tier via AI Studio).
+  if (process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) return "gemini";
+  if (process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) return "openai";
+  return "openai";
 }
 
 async function callGemini(prompt: string): Promise<ProviderResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
+  // Free-tier friendly default; override with GEMINI_MODEL (e.g. gemini-2.5-flash).
+  const modelId = process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash";
   const client = new GoogleGenerativeAI(apiKey);
-  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = client.getGenerativeModel({ model: modelId });
   const result = await model.generateContent(prompt);
   const reply = result.response.text().trim();
   if (!reply) throw new Error("Gemini response empty");
@@ -61,25 +81,41 @@ export async function POST(request: NextRequest) {
     ].join("\n");
 
     let reply: string | null = null;
-    const providerPreference = (process.env.AI_PROVIDER ?? "openai").toLowerCase();
+    const providerPreference = resolveAiProvider();
+
+    const tryOpenAI = async () => {
+      try {
+        reply = (await callOpenAI(prompt)).reply;
+      } catch (err) {
+        console.error("[chat] OpenAI failed:", err);
+      }
+    };
+    const tryGemini = async () => {
+      try {
+        reply = (await callGemini(prompt)).reply;
+      } catch (err) {
+        console.error("[chat] Gemini failed:", err);
+      }
+    };
 
     if (providerPreference === "gemini") {
-      try {
-        reply = (await callGemini(prompt)).reply;
-      } catch {
-        reply = (await callOpenAI(prompt)).reply;
-      }
+      await tryGemini();
+      if (!reply) await tryOpenAI();
     } else {
-      try {
-        reply = (await callOpenAI(prompt)).reply;
-      } catch {
-        reply = (await callGemini(prompt)).reply;
-      }
+      await tryOpenAI();
+      if (!reply) await tryGemini();
     }
 
+    const trimmedReply = (reply ?? "").trim();
+    const usedRuleBased = !trimmedReply;
+    const replyText = usedRuleBased
+      ? `${fallback.reason} The picks below match your plans and the weather.`
+      : trimmedReply;
+
     return NextResponse.json({
-      reply: reply ?? fallback.reason,
+      reply: replyText,
       outfitSuggestion: fallback,
+      ...(usedRuleBased ? { stylistMode: "rules" as const } : {}),
     });
   } catch (error) {
     return NextResponse.json(
