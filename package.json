@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3000 --webpack",
+    "dev:turbo": "next dev --port 3000 --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."
@@ -41,6 +42,8 @@
     "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-toggle": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.105.1",
     "canvas-confetti": "1.9.4",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

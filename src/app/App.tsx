@@ -1,4 +1,4 @@
- 'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -12,14 +12,26 @@ import { UploadFlow } from './components/UploadFlow';
 import { EmptyState } from './components/EmptyState';
 import { SelfieUpload } from './components/SelfieUpload';
 import { getGarmentImage } from '@/lib/garment-images';
+import { WARDROBE_TEST_ITEMS } from '@/lib/wardrobe-test-data';
+import {
+  createBrowserSupabaseClient,
+  isSupabaseConfigured,
+} from '@/lib/supabase/client';
+import {
+  countWardrobeItems,
+  ensureAnonymousSession,
+  fetchProfile,
+  fetchSavedOutfits,
+  fetchWardrobe,
+  insertSavedOutfit,
+  insertWardrobeItem,
+  seedWardrobeFromDemo,
+  ensureProfileRow,
+  updateProfile,
+} from '@/lib/supabase/sync';
+import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
 
-type WardrobeCategory = 'tops' | 'bottoms' | 'accessories';
-
-interface WardrobeItem {
-  code: string;
-  type: string;
-  category: WardrobeCategory;
-}
+const SUPABASE_ON = isSupabaseConfigured();
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(true);
@@ -38,61 +50,126 @@ export default function App() {
   const [location, setLocation] = useState('Berlin');
   const [weather, setWeather] = useState({ temp: 12, condition: 'Cloudy' });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [savedOutfits, setSavedOutfits] = useState<Array<{
-    id: string;
-    tops?: WardrobeItem;
-    bottoms?: WardrobeItem;
-    accessories?: WardrobeItem;
-    savedAt: Date;
-  }>>([]);
+  const [savedOutfits, setSavedOutfits] = useState<SavedOutfit[]>([]);
   const [currentView, setCurrentView] = useState<'wardrobe' | 'outfits'>('wardrobe');
   const [currentPage, setCurrentPage] = useState(0);
   const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
   const [tryOnImageUrl, setTryOnImageUrl] = useState<string | null>(null);
   const baseModelImg = 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1200&q=80';
   const itemsPerPage = 6;
-  const userName = "Alex";
+  const [userName, setUserName] = useState('Alex');
+  const [supabaseReady, setSupabaseReady] = useState(!SUPABASE_ON);
 
-  // Dynamic wardrobe items (start with sample data for demo)
-  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([
-    { code: 'BR-09', type: 'Bra', category: 'tops' },
-    { code: 'TT-04', type: 'Top', category: 'tops' },
-    { code: 'TT-02', type: 'Dress', category: 'tops' },
-    { code: 'BD-03', type: 'Bodysuit', category: 'tops' },
-    { code: 'TS-04', type: 'Turtleneck', category: 'tops' },
-    { code: 'LS-04', type: 'Sweater', category: 'tops' },
-    { code: 'WJ-02', type: 'Jacket', category: 'tops' },
-    { code: 'BD-10', type: 'Dress', category: 'tops' },
-    { code: 'BD-04', type: 'Pants', category: 'bottoms' },
-    { code: 'WJ-01', type: 'Coat', category: 'tops' },
-    { code: 'UW-02', type: 'Underwear', category: 'bottoms' },
-    { code: 'SH-06', type: 'Shorts', category: 'bottoms' },
-    { code: 'LG-13', type: 'Pants', category: 'bottoms' },
-    { code: 'LG-14', type: 'Pants', category: 'bottoms' },
-    { code: 'SK-08', type: 'Skirt', category: 'bottoms' },
-    { code: 'AC-01', type: 'Hat', category: 'accessories' },
-    { code: 'AC-02', type: 'Scarf', category: 'accessories' },
-    { code: 'AC-03', type: 'Belt', category: 'accessories' },
-    { code: 'AC-04', type: 'Bag', category: 'accessories' }
-  ]);
+  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>(() =>
+    SUPABASE_ON ? [] : [...WARDROBE_TEST_ITEMS]
+  );
 
-  const handleLogin = () => setIsLoggedIn(true);
-  const handleLogout = () => setIsLoggedIn(false);
-
-  // Show onboarding on first load
   useEffect(() => {
+    if (!SUPABASE_ON) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const session = await ensureAnonymousSession(supabase);
+        const userId = session.user.id;
+
+        let profile = await fetchProfile(supabase, userId);
+        if (!profile) {
+          await ensureProfileRow(supabase, userId);
+          profile = await fetchProfile(supabase, userId);
+        }
+        if (cancelled) return;
+
+        if (profile) {
+          setUserName(profile.display_name || 'Alex');
+          setHasCompletedOnboarding(profile.onboarding_completed);
+          if (profile.selfie_url) setUserSelfie(profile.selfie_url);
+        }
+
+        const n = await countWardrobeItems(supabase, userId);
+        if (n === 0) {
+          await seedWardrobeFromDemo(supabase, userId, WARDROBE_TEST_ITEMS);
+        }
+        const items = await fetchWardrobe(supabase, userId);
+        if (!cancelled) setWardrobeItems(items);
+
+        const outfits = await fetchSavedOutfits(supabase, userId);
+        if (!cancelled) setSavedOutfits(outfits);
+      } catch (e) {
+        console.error('Supabase bootstrap failed', e);
+        if (!cancelled) {
+          setWardrobeItems([...WARDROBE_TEST_ITEMS]);
+          setSupabaseReady(true);
+          return;
+        }
+      } finally {
+        if (!cancelled) setSupabaseReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleLogin = async () => {
+    setIsLoggedIn(true);
+    if (!SUPABASE_ON) return;
+    try {
+      const supabase = createBrowserSupabaseClient();
+      await ensureAnonymousSession(supabase);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      let profile = await fetchProfile(supabase, user.id);
+      if (!profile) {
+        await ensureProfileRow(supabase, user.id);
+        profile = await fetchProfile(supabase, user.id);
+      }
+      if (profile) {
+        setUserName(profile.display_name || 'Alex');
+        setHasCompletedOnboarding(profile.onboarding_completed);
+        if (profile.selfie_url) setUserSelfie(profile.selfie_url);
+      }
+
+      const n = await countWardrobeItems(supabase, user.id);
+      if (n === 0) {
+        await seedWardrobeFromDemo(supabase, user.id, WARDROBE_TEST_ITEMS);
+      }
+      setWardrobeItems(await fetchWardrobe(supabase, user.id));
+      setSavedOutfits(await fetchSavedOutfits(supabase, user.id));
+    } catch (e) {
+      console.error('Supabase login sync failed', e);
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsLoggedIn(false);
+    setSelectedOutfit({});
+    if (SUPABASE_ON) {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.error('Supabase signOut failed', e);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoggedIn || hasCompletedOnboarding) return;
+    if (SUPABASE_ON && !supabaseReady) return;
     const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-    if (isLoggedIn && !hasSeenOnboarding && !hasCompletedOnboarding) {
+    if (!hasSeenOnboarding) {
       setShowOnboarding(true);
     }
-  }, [isLoggedIn, hasCompletedOnboarding]);
+  }, [isLoggedIn, hasCompletedOnboarding, supabaseReady]);
 
-  // Load user selfie from storage
   useEffect(() => {
+    if (SUPABASE_ON) return;
     const storedSelfie = localStorage.getItem('userSelfie');
-    if (storedSelfie) {
-      setUserSelfie(storedSelfie);
-    }
+    if (storedSelfie) setUserSelfie(storedSelfie);
   }, []);
 
   useEffect(() => {
@@ -124,18 +201,44 @@ export default function App() {
     }
   }, [isLoggedIn, userSelfie, wardrobeItems.length, hasCompletedOnboarding]);
 
-  const handleOnboardingComplete = () => {
+  const handleOnboardingComplete = async () => {
     setShowOnboarding(false);
     setHasCompletedOnboarding(true);
     localStorage.setItem('hasSeenOnboarding', 'true');
+    if (SUPABASE_ON) {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          await updateProfile(supabase, user.id, { onboarding_completed: true });
+        }
+      } catch (e) {
+        console.error('Failed to persist onboarding', e);
+      }
+    }
   };
 
-  const handleSelfieUpload = (imageUrl: string) => {
+  const handleSelfieUpload = async (imageUrl: string) => {
     setUserSelfie(imageUrl);
     setTryOnImageUrl(null);
     localStorage.setItem('userSelfie', imageUrl);
     setShowSelfieUpload(false);
     showToast('Profile photo uploaded!');
+    if (SUPABASE_ON) {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          await updateProfile(supabase, user.id, { selfie_url: imageUrl });
+        }
+      } catch (e) {
+        console.error('Failed to persist selfie', e);
+      }
+    }
   };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -143,26 +246,77 @@ export default function App() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleSaveOutfit = () => {
-    if (selectedOutfit.tops || selectedOutfit.bottoms) {
-      const newOutfit = {
-        id: Date.now().toString(),
-        ...selectedOutfit,
-        savedAt: new Date()
-      };
-      setSavedOutfits(prev => [newOutfit, ...prev]);
-      showToast('Outfit saved successfully!');
+  const handleSaveOutfit = async () => {
+    if (!selectedOutfit.tops && !selectedOutfit.bottoms) return;
+
+    let id = `${Date.now()}`;
+    if (SUPABASE_ON) {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const inserted = await insertSavedOutfit(supabase, user.id, {
+            tops: selectedOutfit.tops,
+            bottoms: selectedOutfit.bottoms,
+            accessories: selectedOutfit.accessories,
+            savedAt: new Date(),
+          });
+          if (inserted) id = inserted;
+        }
+      } catch (e) {
+        console.error('Failed to save outfit remotely', e);
+      }
     }
+
+    const newOutfit: SavedOutfit = {
+      id,
+      ...selectedOutfit,
+      savedAt: new Date(),
+    };
+    setSavedOutfits((prev) => [newOutfit, ...prev]);
+    showToast('Outfit saved successfully!');
   };
 
-  const handleAddItem = (item: { type: string; category: string }) => {
+  const handleAddItem = (item: {
+    type: string;
+    category: string;
+    imageUrl?: string;
+    title?: string;
+    sourceUrl?: string;
+    attribution?: string;
+  }) => {
     const prefix = item.category === 'tops' ? 'TP' : item.category === 'bottoms' ? 'BT' : 'AC';
     const newItem: WardrobeItem = {
       code: `${prefix}-${Date.now().toString().slice(-4)}`,
       type: item.type,
-      category: item.category as WardrobeCategory
+      category: item.category as WardrobeCategory,
+      ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+      ...(item.title ? { title: item.title } : {}),
+      ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
+      ...(item.attribution ? { attribution: item.attribution } : {}),
     };
-    setWardrobeItems(prev => [...prev, newItem]);
+
+    setWardrobeItems((prev) => {
+      const next = [...prev, newItem];
+      if (SUPABASE_ON) {
+        void (async () => {
+          try {
+            const supabase = createBrowserSupabaseClient();
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+            if (user) {
+              await insertWardrobeItem(supabase, user.id, newItem, next.length - 1);
+            }
+          } catch (e) {
+            console.error('Failed to persist wardrobe item', e);
+          }
+        })();
+      }
+      return next;
+    });
     showToast(`${item.type} added to wardrobe!`);
   };
 
@@ -184,7 +338,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personImageUrl: userSelfie,
-          garmentImageUrl: getGarmentImage(selectedGarment.type),
+          garmentImageUrl: selectedGarment.imageUrl ?? getGarmentImage(selectedGarment.type),
           prompt: `Virtual try-on with ${selectedGarment.type}`,
         }),
       });
@@ -248,7 +402,7 @@ export default function App() {
       }} />
       {/* Header */}
       <motion.header
-        initial={{ opacity: 0, y: -20 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className="fixed top-0 left-0 right-0 z-50 px-6 py-5 flex items-center justify-between"
@@ -354,7 +508,7 @@ export default function App() {
           {/* Weather & Location Widget */}
           {isLoggedIn && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1, duration: 0.6 }}
               className="flex justify-center mb-8"
@@ -381,7 +535,7 @@ export default function App() {
           <div className="text-center mb-12">
             {isLoggedIn && (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.6 }}
                 className="mb-6 inline-block px-4 py-2 rounded-full"
@@ -397,7 +551,7 @@ export default function App() {
             )}
 
             <motion.h1
-              initial={{ opacity: 0, y: 20 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.8 }}
               className="mb-6"
@@ -415,7 +569,7 @@ export default function App() {
             </motion.h1>
 
             <motion.p
-              initial={{ opacity: 0, y: 20 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5, duration: 0.8 }}
               className="mb-8 max-w-[600px] mx-auto"
@@ -426,7 +580,7 @@ export default function App() {
 
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <motion.button
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7, duration: 0.8 }}
                 whileHover={{ scale: 1.05, y: -2 }}
@@ -445,7 +599,7 @@ export default function App() {
 
               {isLoggedIn && (
                 <motion.button
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={false}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.8, duration: 0.8 }}
                   whileHover={{ scale: 1.05, y: -2 }}
@@ -469,7 +623,7 @@ export default function App() {
 
           {/* Cards Grid */}
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.9, duration: 0.8 }}
             className="grid md:grid-cols-2 gap-6 max-w-[900px] mx-auto"
@@ -519,7 +673,7 @@ export default function App() {
       <section className="px-6 md:px-12 lg:px-20 py-24">
         <div className="max-w-[1400px] mx-auto">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={false}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
@@ -560,7 +714,7 @@ export default function App() {
             ].map((feature, idx) => (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, y: 30 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: idx * 0.1 }}
@@ -590,7 +744,7 @@ export default function App() {
 
           {/* Example Prompts */}
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={false}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
@@ -619,7 +773,7 @@ export default function App() {
               ].map((prompt, idx) => (
                 <motion.div
                   key={idx}
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={false}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.5, delay: idx * 0.1 }}
@@ -660,7 +814,7 @@ export default function App() {
       <section className="px-6 md:px-12 lg:px-20 py-24">
         <div className="max-w-[1400px] mx-auto">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={false}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
@@ -683,7 +837,7 @@ export default function App() {
           {/* Wardrobe Builder */}
           {currentView === 'wardrobe' && (
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
+              initial={false}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8, delay: 0.2 }}
@@ -754,7 +908,7 @@ export default function App() {
                     return (
                       <motion.div
                         key={item.code}
-                        initial={{ opacity: 0, scale: 0.9 }}
+                        initial={false}
                         whileInView={{ opacity: 1, scale: 1 }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.4, delay: idx * 0.05 }}
@@ -763,13 +917,24 @@ export default function App() {
                         onClick={() => handleItemClick(item)}
                       >
                         <div
-                          className="aspect-square bg-white rounded-2xl mb-2 flex items-center justify-center relative overflow-hidden p-3 transition-all"
+                          className={`aspect-square bg-white rounded-2xl mb-2 flex items-center justify-center relative overflow-hidden transition-all ${item.imageUrl ? 'p-0' : 'p-3'}`}
                           style={{
                             border: isSelected ? '3px solid #667eea' : '2px solid rgba(0, 0, 0, 0.1)',
                             boxShadow: isSelected ? '0 4px 16px rgba(102, 126, 234, 0.4)' : 'none'
                           }}
                         >
-                          <ClothingIcon type={item.type} />
+                          {item.imageUrl ? (
+                            <Image
+                              src={item.imageUrl}
+                              alt={item.title ?? item.type}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 768px) 33vw, 200px"
+                              unoptimized
+                            />
+                          ) : (
+                            <ClothingIcon type={item.type} />
+                          )}
                           {isSelected && (
                             <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
                               <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -778,8 +943,10 @@ export default function App() {
                             </div>
                           )}
                         </div>
-                        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em' }}>
-                          {item.code}
+                        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', lineHeight: 1.3 }}>
+                          {item.title
+                            ? `${item.title.length > 28 ? `${item.title.slice(0, 28)}…` : item.title}`
+                            : item.code}
                         </div>
                       </motion.div>
                     );
@@ -847,7 +1014,7 @@ export default function App() {
               {/* Model Preview - Always Visible */}
               <div className="lg:sticky lg:top-24 lg:self-start">
                 <motion.div
-                  initial={{ opacity: 0, x: 20 }}
+                  initial={false}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.8, delay: 0.4 }}
@@ -920,36 +1087,48 @@ export default function App() {
                     {selectedOutfit.bottoms && (
                       <motion.div
                         key={selectedOutfit.bottoms.code}
-                        initial={{ scale: 0, opacity: 0 }}
+                        initial={false}
                         animate={{ scale: 1, opacity: 1 }}
                         transition={{ type: 'spring', damping: 20, stiffness: 300 }}
                         className="absolute inset-0 pointer-events-none"
                       >
-                        <ClothingSticker type={selectedOutfit.bottoms.type} code={selectedOutfit.bottoms.code} />
+                        <ClothingSticker
+                          type={selectedOutfit.bottoms.type}
+                          code={selectedOutfit.bottoms.code}
+                          imageUrl={selectedOutfit.bottoms.imageUrl}
+                        />
                       </motion.div>
                     )}
 
                     {selectedOutfit.tops && (
                       <motion.div
                         key={selectedOutfit.tops.code}
-                        initial={{ scale: 0, opacity: 0 }}
+                        initial={false}
                         animate={{ scale: 1, opacity: 1 }}
                         transition={{ type: 'spring', damping: 20, stiffness: 300 }}
                         className="absolute inset-0 pointer-events-none"
                       >
-                        <ClothingSticker type={selectedOutfit.tops.type} code={selectedOutfit.tops.code} />
+                        <ClothingSticker
+                          type={selectedOutfit.tops.type}
+                          code={selectedOutfit.tops.code}
+                          imageUrl={selectedOutfit.tops.imageUrl}
+                        />
                       </motion.div>
                     )}
 
                     {selectedOutfit.accessories && (
                       <motion.div
                         key={selectedOutfit.accessories.code}
-                        initial={{ scale: 0, opacity: 0 }}
+                        initial={false}
                         animate={{ scale: 1, opacity: 1 }}
                         transition={{ type: 'spring', damping: 20, stiffness: 300 }}
                         className="absolute inset-0 pointer-events-none"
                       >
-                        <ClothingSticker type={selectedOutfit.accessories.type} code={selectedOutfit.accessories.code} />
+                        <ClothingSticker
+                          type={selectedOutfit.accessories.type}
+                          code={selectedOutfit.accessories.code}
+                          imageUrl={selectedOutfit.accessories.imageUrl}
+                        />
                       </motion.div>
                     )}
 
@@ -1065,7 +1244,7 @@ export default function App() {
           {/* Saved Outfits View */}
           {currentView === 'outfits' && (
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8 }}
               className="mb-16"
@@ -1116,7 +1295,7 @@ export default function App() {
                     {savedOutfits.map((outfit) => (
                       <motion.div
                         key={outfit.id}
-                        initial={{ opacity: 0, scale: 0.9 }}
+                        initial={false}
                         animate={{ opacity: 1, scale: 1 }}
                         whileHover={{ y: -4 }}
                         className="p-6 rounded-2xl"
@@ -1136,17 +1315,29 @@ export default function App() {
                           />
                           {outfit.bottoms && (
                             <div className="absolute inset-0">
-                              <ClothingSticker type={outfit.bottoms.type} code={outfit.bottoms.code} />
+                              <ClothingSticker
+                                type={outfit.bottoms.type}
+                                code={outfit.bottoms.code}
+                                imageUrl={outfit.bottoms.imageUrl}
+                              />
                             </div>
                           )}
                           {outfit.tops && (
                             <div className="absolute inset-0">
-                              <ClothingSticker type={outfit.tops.type} code={outfit.tops.code} />
+                              <ClothingSticker
+                                type={outfit.tops.type}
+                                code={outfit.tops.code}
+                                imageUrl={outfit.tops.imageUrl}
+                              />
                             </div>
                           )}
                           {outfit.accessories && (
                             <div className="absolute inset-0">
-                              <ClothingSticker type={outfit.accessories.type} code={outfit.accessories.code} />
+                              <ClothingSticker
+                                type={outfit.accessories.type}
+                                code={outfit.accessories.code}
+                                imageUrl={outfit.accessories.imageUrl}
+                              />
                             </div>
                           )}
                         </div>
@@ -1206,7 +1397,7 @@ export default function App() {
             ].map((feature, idx) => (
               <motion.div
                 key={idx}
-                initial={{ opacity: 0, y: 30 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: idx * 0.1 }}
@@ -1239,7 +1430,7 @@ export default function App() {
           <div className="grid md:grid-cols-2 gap-8">
             {/* Left Column */}
             <motion.div
-              initial={{ opacity: 0, x: -30 }}
+              initial={false}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
@@ -1275,7 +1466,7 @@ export default function App() {
 
             {/* Right Column */}
             <motion.div
-              initial={{ opacity: 0, x: 30 }}
+              initial={false}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8, delay: 0.2 }}
@@ -1328,7 +1519,7 @@ export default function App() {
         <section className="px-6 md:px-12 lg:px-20 py-24">
           <div className="max-w-[1400px] mx-auto">
             <motion.div
-              initial={{ opacity: 0, y: 40 }}
+              initial={false}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
@@ -1370,7 +1561,7 @@ export default function App() {
                 ].map((stat, idx) => (
                   <motion.div
                     key={idx}
-                    initial={{ opacity: 0, scale: 0.9 }}
+                    initial={false}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5, delay: idx * 0.1 }}
@@ -1398,7 +1589,7 @@ export default function App() {
       {/* Testimonial */}
       <section className="px-6 md:px-12 lg:px-20 py-24">
         <motion.div
-          initial={{ opacity: 0, y: 40 }}
+          initial={false}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8 }}
@@ -1434,7 +1625,7 @@ export default function App() {
       {/* Final CTA */}
       <section className="px-6 md:px-12 lg:px-20 py-32">
         <motion.div
-          initial={{ opacity: 0, y: 40 }}
+          initial={false}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8 }}
@@ -1476,7 +1667,7 @@ export default function App() {
       {isLoggedIn && !showChat && currentView === 'wardrobe' && (
         <>
           <motion.button
-            initial={{ scale: 0, opacity: 0 }}
+            initial={false}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 1, type: 'spring', damping: 20 }}
             whileHover={{ scale: 1.1 }}
@@ -1493,7 +1684,7 @@ export default function App() {
           </motion.button>
 
           <motion.button
-            initial={{ scale: 0, opacity: 0 }}
+            initial={false}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 1.1, type: 'spring', damping: 20 }}
             whileHover={{ scale: 1.1 }}
@@ -1556,7 +1747,7 @@ export default function App() {
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
             className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] px-6 py-4 rounded-full flex items-center gap-3"

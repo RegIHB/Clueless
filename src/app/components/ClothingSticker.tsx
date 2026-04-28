@@ -1,9 +1,11 @@
 interface ClothingStickerProps {
   type: string;
   code: string;
+  /** When set (e.g. from product picker), shows this photo on the preview mannequin. */
+  imageUrl?: string;
 }
 
-export function ClothingSticker({ type, code }: ClothingStickerProps) {
+export function ClothingSticker({ type, code, imageUrl }: ClothingStickerProps) {
   const getClothingStyle = () => {
     switch (type.toLowerCase()) {
       case 'bra':
@@ -144,24 +146,35 @@ export function ClothingSticker({ type, code }: ClothingStickerProps) {
 
   return (
     <div
-      className="absolute rounded-lg flex items-center justify-center"
+      className="absolute rounded-lg flex items-center justify-center overflow-hidden"
       style={{
         ...style,
-        background: `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)`,
+        background: imageUrl
+          ? '#111'
+          : `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)`,
+        backgroundImage: imageUrl ? `url(${imageUrl})` : undefined,
+        backgroundSize: imageUrl ? 'cover' : undefined,
+        backgroundPosition: imageUrl ? 'center' : undefined,
         border: '2px solid rgba(0, 0, 0, 0.2)',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         zIndex: 10
       }}
     >
-      {/* Clothing texture/pattern overlay */}
-      <div className="absolute inset-0 opacity-10 rounded-lg" style={{
-        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,.1) 10px, rgba(255,255,255,.1) 20px)'
-      }} />
-
-      {/* Optional: Add subtle highlights */}
-      <div className="absolute inset-0 rounded-lg" style={{
-        background: 'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)'
-      }} />
+      {!imageUrl && (
+        <>
+          <div className="absolute inset-0 opacity-10 rounded-lg" style={{
+            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,.1) 10px, rgba(255,255,255,.1) 20px)'
+          }} />
+          <div className="absolute inset-0 rounded-lg" style={{
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)'
+          }} />
+        </>
+      )}
+      {imageUrl && (
+        <div className="absolute inset-0 rounded-lg pointer-events-none" style={{
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 40%, rgba(0,0,0,0.15) 100%)'
+        }} />
+      )}
     </div>
   );
 }
