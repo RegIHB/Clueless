@@ -46,7 +46,7 @@ jobs:
     name: Vercel Preview
     runs-on: ubuntu-latest
     needs: ci
-    if: github.event_name == 'pull_request' && secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != ''
+    if: github.event_name == 'pull_request'
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -69,13 +69,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check Vercel secrets
+        id: secrets_check
+        run: |
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ]; then
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+            echo "Missing Vercel secrets. Skipping preview deployment."
+          fi
+
       - name: Deploy preview to Vercel
         id: vercel
+        if: steps.secrets_check.outputs.has_secrets == 'true'
         run: |
           PREVIEW_URL=$(pnpm dlx vercel deploy --token="$VERCEL_TOKEN")
           echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL
+        if: steps.secrets_check.outputs.has_secrets == 'true'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: vercel-preview
