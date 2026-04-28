@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Camera, Upload, X, Check } from 'lucide-react';
+import Image from 'next/image';
 
 interface SelfieUploadProps {
   onClose: () => void;
@@ -123,9 +124,11 @@ export function SelfieUpload({ onClose, onUpload }: SelfieUploadProps) {
                 background: '#f5f5f5',
                 border: '3px solid #000'
               }}>
-                <img
+                <Image
                   src={uploadedImage}
                   alt="Your photo"
+                  fill
+                  unoptimized
                   className="w-full h-full object-cover"
                 />
               </div>

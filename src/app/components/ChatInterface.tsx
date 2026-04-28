@@ -30,45 +30,7 @@ export function ChatInterface({ onClose, location, weather }: ChatInterfaceProps
   ]);
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
-
-  const generateOutfitRecommendation = (userPrompt: string) => {
-    // Mock AI response - in production, this would call an actual AI API
-    const hasWork = userPrompt.toLowerCase().includes('work');
-    const hasDate = userPrompt.toLowerCase().includes('date');
-    const isCold = weather.temp < 15;
-    const isRaining = weather.condition.toLowerCase().includes('rain');
-
-    let tops: string[] = [];
-    let bottoms: string[] = [];
-    let accessories: string[] = [];
-    let reason = '';
-
-    if (hasWork && hasDate) {
-      tops = ['TT-04', 'TS-04', 'WJ-02'];
-      bottoms = ['BD-04', 'LG-13'];
-      accessories = ['AC-03'];
-      reason = `For work-to-date transition, I suggest a versatile look. Start with a ${isCold ? 'turtleneck' : 'top'} and structured pants for the office. The jacket adds polish and can be removed for date night. ${isRaining ? 'Weather alert: bring an umbrella!' : ''}`;
-    } else if (hasWork) {
-      tops = ['TS-04', 'TT-04'];
-      bottoms = ['BD-04', 'LG-14'];
-      accessories = ['AC-03'];
-      reason = `Professional look for work. Clean lines and structured pieces. ${isCold ? 'Layer with a jacket for warmth.' : ''}`;
-    } else if (hasDate) {
-      tops = ['BD-03', 'TT-02', 'LS-04'];
-      bottoms = ['SK-08', 'LG-13'];
-      accessories = ['AC-02', 'AC-04'];
-      reason = `Date night ready! These pieces balance style and comfort. ${isCold ? 'Add a cozy layer for evening temperatures.' : ''}`;
-    } else {
-      tops = ['TT-04', 'BD-03'];
-      bottoms = ['SH-06', 'BD-04'];
-      accessories = ['AC-01'];
-      reason = `Casual and comfortable for your day. Mix and match based on your plans!`;
-    }
-
-    return { tops, bottoms, accessories, reason };
-  };
-
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
 
     const userMessage: Message = {
@@ -81,19 +43,47 @@ export function ChatInterface({ onClose, location, weather }: ChatInterfaceProps
     setInput('');
     setIsThinking(true);
 
-    // Simulate AI thinking
-    setTimeout(() => {
-      const outfitSuggestion = generateOutfitRecommendation(input);
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: input,
+          location,
+          weather
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Chat request failed');
+      }
+
+      const payload = await response.json();
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: outfitSuggestion.reason,
-        outfitSuggestion
+        content: payload.reply,
+        outfitSuggestion: payload.outfitSuggestion
       };
-
       setMessages(prev => [...prev, assistantMessage]);
+    } catch {
+      setMessages(prev => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: "I couldn't reach the stylist backend, so here's a quick recommendation: start with TT-04 and BD-04, then layer with WJ-02 if it gets cold.",
+          outfitSuggestion: {
+            tops: ['TT-04', 'WJ-02'],
+            bottoms: ['BD-04'],
+            accessories: ['AC-03'],
+            reason: 'Fallback styling suggestion while backend is unavailable.'
+          }
+        }
+      ]);
+    } finally {
       setIsThinking(false);
-    }, 1500);
+    }
   };
 
   return (
