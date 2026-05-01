@@ -39,7 +39,7 @@ export function SelfieUpload({ onClose, onUpload }: SelfieUploadProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+      className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6 overflow-y-auto overscroll-contain"
       style={{
         background: 'rgba(0, 0, 0, 0.8)',
         backdropFilter: 'blur(8px)'
@@ -50,7 +50,7 @@ export function SelfieUpload({ onClose, onUpload }: SelfieUploadProps) {
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className="max-w-[600px] w-full rounded-3xl overflow-hidden"
+        className="max-w-[600px] w-full max-h-[min(90vh,100dvh-1rem)] rounded-3xl overflow-hidden flex flex-col my-auto"
         style={{
           background: '#fff',
           border: '4px solid #000',
@@ -59,22 +59,24 @@ export function SelfieUpload({ onClose, onUpload }: SelfieUploadProps) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 border-b-3 border-black flex items-center justify-between" style={{
+        <div className="p-4 sm:p-6 border-b-4 border-black flex items-center justify-between gap-3 min-w-0 shrink-0" style={{
           background: 'linear-gradient(135deg, #FFB3D9 0%, #FFC9E5 100%)'
         }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.01em' }}>
+          <h2 className="min-w-0 break-words pr-2" style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.01em' }}>
             UPLOAD YOUR PHOTO
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-110"
+            className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-transform duration-200 ease-out hover:scale-110 active:scale-95"
             style={{ background: '#000', color: '#fff' }}
+            aria-label="Close"
           >
             <X className="w-5 h-5" strokeWidth={2.5} />
           </button>
         </div>
 
-        <div className="p-8">
+        <div className="p-6 sm:p-8 flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {!uploadedImage ? (
             <div className="space-y-6">
               <p style={{ fontSize: '15px', fontWeight: 500, lineHeight: 1.6, marginBottom: '24px' }}>
@@ -82,7 +84,7 @@ export function SelfieUpload({ onClose, onUpload }: SelfieUploadProps) {
               </p>
 
               <label
-                className="w-full p-8 rounded-2xl text-center cursor-pointer hover:scale-[1.02] transition-transform border-3 border-dashed border-black/20 hover:border-black/40"
+                className="w-full p-8 rounded-2xl text-center cursor-pointer hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out border-[3px] border-dashed border-black/20 hover:border-black/40"
                 style={{
                   background: '#FFE5F1',
                   display: 'block'
@@ -120,7 +122,7 @@ export function SelfieUpload({ onClose, onUpload }: SelfieUploadProps) {
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="aspect-[3/4] rounded-2xl overflow-hidden" style={{
+              <div className="relative aspect-[3/4] rounded-2xl overflow-hidden" style={{
                 background: '#f5f5f5',
                 border: '3px solid #000'
               }}>
@@ -135,8 +137,9 @@ export function SelfieUpload({ onClose, onUpload }: SelfieUploadProps) {
 
               <div className="flex gap-3">
                 <button
+                  type="button"
                   onClick={() => setUploadedImage(null)}
-                  className="flex-1 px-6 py-3 rounded-full"
+                  className="flex-1 px-6 py-3 rounded-full transition-opacity duration-200 ease-out hover:opacity-90 active:opacity-80"
                   style={{
                     background: '#f5f5f5',
                     border: '2px solid #000',
@@ -148,9 +151,10 @@ export function SelfieUpload({ onClose, onUpload }: SelfieUploadProps) {
                   CHANGE PHOTO
                 </button>
                 <button
+                  type="button"
                   onClick={handleConfirm}
                   disabled={isUploading}
-                  className="flex-1 px-6 py-3 rounded-full text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-3 rounded-full text-white disabled:opacity-50 disabled:grayscale transition-opacity duration-200 ease-out flex items-center justify-center gap-2"
                   style={{
                     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                     fontSize: '14px',

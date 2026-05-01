@@ -46,7 +46,7 @@ export function EmptyState({ onAddItem }: EmptyStateProps) {
         whileHover={{ scale: 1.05, y: -2 }}
         whileTap={{ scale: 0.95 }}
         onClick={onAddItem}
-        className="px-10 py-4 rounded-full text-white inline-flex items-center gap-3"
+        className="px-10 py-4 rounded-full text-white inline-flex items-center gap-3 transition-[transform,box-shadow,opacity] duration-200 ease-out"
         style={{
           background: '#000',
           fontSize: '14px',

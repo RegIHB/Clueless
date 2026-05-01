@@ -4,8 +4,30 @@ html,
 body {
   height: 100%;
   margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #__next {
   height: 100%;
+}
+
+/* Keyboard focus — matches high-contrast neo-brutalist UI */
+@layer base {
+  button:focus-visible,
+  a[href]:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  summary:focus-visible,
+  [role="tab"]:focus-visible {
+    outline: 2px solid #000;
+    outline-offset: 3px;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline-offset: 2px;
+  }
 }
