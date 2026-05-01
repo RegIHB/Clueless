@@ -125,7 +125,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+      className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6 overflow-y-auto overscroll-contain"
       style={{
         background: 'rgba(0, 0, 0, 0.8)',
         backdropFilter: 'blur(8px)'
@@ -136,35 +136,36 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
-        className={`w-full rounded-3xl overflow-hidden ${modalWide ? 'max-w-[min(920px,calc(100vw-2rem))]' : 'max-w-[600px]'}`}
+        className={`w-full rounded-3xl overflow-hidden flex flex-col my-auto max-h-[min(90vh,100dvh-1rem)] ${modalWide ? 'max-w-[min(920px,calc(100vw-2rem))]' : 'max-w-[600px]'}`}
         style={{
           background: '#fff',
           border: '4px solid #000',
           boxShadow: '0 24px 64px rgba(0, 0, 0, 0.5)',
-          maxHeight: 'min(90vh, 880px)'
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
-          className="p-6 border-b-3 border-black flex items-center justify-between shrink-0"
+          className="p-4 sm:p-6 border-b-4 border-black flex items-center justify-between gap-3 shrink-0 min-w-0"
           style={{
             background: 'linear-gradient(135deg, #FFE5C8 0%, #FFD4B8 100%)'
           }}
         >
-          <h2 style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.01em' }}>
+          <h2 className="min-w-0 break-words pr-2" style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.01em' }}>
             ADD TO WARDROBE
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="w-10 h-10 rounded-full flex items-center justify-center transition-transform hover:scale-110"
+            className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-transform duration-200 ease-out hover:scale-110 active:scale-95"
             style={{ background: '#000', color: '#fff' }}
+            aria-label="Close"
           >
             <X className="w-5 h-5" strokeWidth={2.5} />
           </button>
         </div>
 
         <div
-          className={`p-8 overflow-y-auto ${step === 'picker' ? 'max-h-[calc(90vh-120px)]' : ''}`}
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 sm:p-8"
         >
           {step === 'method' && (
             <motion.div
@@ -178,7 +179,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
 
               <button
                 onClick={goToDetailsFromMethod}
-                className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] transition-transform"
+                className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#FFE5F1',
                   border: '3px solid #000',
@@ -196,7 +197,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
 
               <button
                 onClick={goToDetailsFromMethod}
-                className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] transition-transform"
+                className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#FFE5C8',
                   border: '3px solid #000',
@@ -220,7 +221,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   setDebouncedQ('');
                   setPickerResults([]);
                 }}
-                className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] transition-transform"
+                className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#E0F2FE',
                   border: '3px solid #000',
@@ -268,7 +269,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="e.g. navy wool peacoat, leather tote bag"
-                  className="w-full px-4 py-3 rounded-xl outline-none"
+                  className="w-full px-4 py-3 rounded-xl outline-none transition-[box-shadow,border-color] duration-200 ease-out"
                   style={{
                     border: '3px solid #000',
                     fontSize: '15px',
@@ -317,7 +318,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                           key={p.id}
                           type="button"
                           onClick={() => setPickedProduct(p)}
-                          className="rounded-2xl text-left overflow-hidden transition-transform hover:scale-[1.02]"
+                          className="rounded-2xl text-left overflow-hidden transition-[transform,box-shadow] duration-200 ease-out hover:scale-[1.02] active:scale-[0.99]"
                           style={{
                             border: selected ? '3px solid #0284c7' : '3px solid #000',
                             boxShadow: selected ? '4px 4px 0 #0284c7' : '4px 4px 0 #000',
@@ -434,7 +435,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                         setSelectedCategory(cat);
                         setSelectedType('');
                       }}
-                      className="flex-1 px-4 py-3 rounded-full transition-all"
+                      className="flex-1 px-4 py-3 rounded-full transition-colors duration-200 ease-out"
                       style={{
                         background: selectedCategory === cat ? '#000' : '#f5f5f5',
                         color: selectedCategory === cat ? '#fff' : '#000',
@@ -460,7 +461,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                     <button
                       key={type}
                       onClick={() => setSelectedType(type)}
-                      className="px-4 py-3 rounded-xl text-left transition-all"
+                      className="px-4 py-3 rounded-xl text-left transition-colors duration-200 ease-out"
                       style={{
                         background: selectedType === type ? '#FFE5F1' : '#fff',
                         border: selectedType === type ? '3px solid #000' : '2px solid rgba(0, 0, 0, 0.1)',

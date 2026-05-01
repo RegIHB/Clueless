@@ -392,7 +392,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden" style={{
+    <div className="min-h-screen relative overflow-x-hidden" style={{
       background: 'linear-gradient(180deg, #FFB3D9 0%, #FFC9E5 50%, #FFE5F1 100%)'
     }}>
       {/* Subtle dot pattern */}
@@ -405,28 +405,29 @@ export default function App() {
         initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="fixed top-0 left-0 right-0 z-50 px-6 py-5 flex items-center justify-between"
+        className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3"
         style={{
           background: 'rgba(255, 255, 255, 0.8)',
           backdropFilter: 'blur(12px)',
           borderBottom: '2px solid rgba(0, 0, 0, 0.08)'
         }}
       >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{
             background: '#000000'
           }}>
             <Shirt className="w-4 h-4 text-white" strokeWidth={2} />
           </div>
-          <span className="tracking-[0.05em] uppercase" style={{ fontSize: '13px', fontWeight: 700 }}>Clueless</span>
+          <span className="tracking-[0.05em] uppercase truncate" style={{ fontSize: '13px', fontWeight: 700 }}>Clueless</span>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 sm:gap-6 min-w-0 flex-1 justify-end">
           {isLoggedIn && (
-            <nav className="hidden md:flex items-center gap-6">
+            <nav className="hidden md:flex items-center gap-6 shrink-0">
               <button
+                type="button"
                 onClick={() => setCurrentView('wardrobe')}
-                className="hover:opacity-60 transition-opacity"
+                className="hover:opacity-60 transition-opacity duration-200 ease-out rounded-sm"
                 style={{
                   fontSize: '11px',
                   fontWeight: currentView === 'wardrobe' ? 800 : 600,
@@ -437,8 +438,9 @@ export default function App() {
                 MY WARDROBE
               </button>
               <button
+                type="button"
                 onClick={() => setCurrentView('outfits')}
-                className="hover:opacity-60 transition-opacity flex items-center gap-1"
+                className="hover:opacity-60 transition-opacity duration-200 ease-out rounded-sm flex items-center gap-1"
                 style={{
                   fontSize: '11px',
                   fontWeight: currentView === 'outfits' ? 800 : 600,
@@ -457,11 +459,12 @@ export default function App() {
           )}
 
           {isLoggedIn ? (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               {!userSelfie && (
                 <button
+                  type="button"
                   onClick={() => setShowSelfieUpload(true)}
-                  className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full hover:opacity-80 transition-all"
+                  className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full hover:opacity-80 active:opacity-70 transition-all duration-200 ease-out shrink-0"
                   style={{
                     background: 'linear-gradient(135deg, #FFE5C8 0%, #FFD4B8 100%)',
                     border: '2px solid #000'
@@ -472,22 +475,25 @@ export default function App() {
                 </button>
               )}
               <button
+                type="button"
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 rounded-full hover:opacity-80 transition-all"
+                className="flex items-center gap-1.5 sm:gap-2 pl-2 pr-2 sm:px-4 py-2 rounded-full hover:opacity-80 active:opacity-70 transition-all duration-200 ease-out min-w-0 max-w-full"
                 style={{
                   background: '#FFE5F1',
                   border: '2px solid #000'
                 }}
+                title={`Signed in as ${userName}`}
               >
-                <User className="w-3.5 h-3.5" strokeWidth={2.5} />
-                <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em' }}>{userName.toUpperCase()}</span>
-                <LogOut className="w-3.5 h-3.5" strokeWidth={2.5} />
+                <User className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
+                <span className="truncate max-w-[4.5rem] sm:max-w-[10rem] md:max-w-[14rem]" style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em' }}>{userName.toUpperCase()}</span>
+                <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
               </button>
             </div>
           ) : (
             <button
+              type="button"
               onClick={handleLogin}
-              className="px-5 py-2.5 text-white hover:opacity-90 transition-all rounded-full"
+              className="px-5 py-2.5 text-white hover:opacity-90 active:opacity-80 transition-all duration-200 ease-out rounded-full shrink-0"
               style={{
                 fontSize: '10px',
                 fontWeight: 700,
@@ -513,20 +519,20 @@ export default function App() {
               transition={{ delay: 0.1, duration: 0.6 }}
               className="flex justify-center mb-8"
             >
-              <div className="inline-flex items-center gap-4 px-6 py-3 rounded-full" style={{
+              <div className="inline-flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 sm:px-6 py-3 rounded-full max-w-[calc(100vw-2rem)]" style={{
                 background: 'rgba(255, 255, 255, 0.8)',
                 border: '2px solid #000',
                 boxShadow: '4px 4px 0 #000'
               }}>
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4" strokeWidth={2.5} />
-                  <span style={{ fontSize: '12px', fontWeight: 700 }}>{location}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <MapPin className="w-4 h-4 shrink-0" strokeWidth={2.5} />
+                  <span className="truncate" style={{ fontSize: '12px', fontWeight: 700 }}>{location}</span>
                 </div>
-                <div className="w-px h-4 bg-black opacity-20" />
-                <div className="flex items-center gap-2">
-                  <Cloud className="w-4 h-4" strokeWidth={2.5} />
+                <div className="hidden sm:block w-px h-4 bg-black opacity-20 shrink-0" aria-hidden />
+                <div className="flex items-center gap-2 flex-wrap justify-center min-w-0">
+                  <Cloud className="w-4 h-4 shrink-0" strokeWidth={2.5} />
                   <span style={{ fontSize: '12px', fontWeight: 700 }}>{weather.temp}°C</span>
-                  <span style={{ fontSize: '11px', fontWeight: 600, opacity: 0.7 }}>{weather.condition}</span>
+                  <span className="text-center break-words max-w-[10rem] sm:max-w-none" style={{ fontSize: '11px', fontWeight: 600, opacity: 0.7 }}>{weather.condition}</span>
                 </div>
               </div>
             </motion.div>
@@ -584,7 +590,7 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7, duration: 0.8 }}
                 whileHover={{ scale: 1.05, y: -2 }}
-                className="px-10 py-4 text-white transition-all rounded-full inline-flex items-center gap-3"
+                className="px-10 py-4 text-white transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
                 style={{
                   background: '#000000',
                   fontSize: '12px',
@@ -604,7 +610,7 @@ export default function App() {
                   transition={{ delay: 0.8, duration: 0.8 }}
                   whileHover={{ scale: 1.05, y: -2 }}
                   onClick={() => setShowChat(true)}
-                  className="px-10 py-4 text-black transition-all rounded-full inline-flex items-center gap-3"
+                  className="px-10 py-4 text-black transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
                   style={{
                     background: 'linear-gradient(135deg, #FFE5C8 0%, #FFD4B8 100%)',
                     border: '3px solid #000',
@@ -658,7 +664,7 @@ export default function App() {
             >
               <div className="relative z-10">
                 <h3 className="mb-3" style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.01em' }}>
-                  Clueles
+                  Clueless
                 </h3>
                 <p style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
                   Try the closet scanner beta
@@ -794,7 +800,7 @@ export default function App() {
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setShowChat(true)}
-              className="mt-8 px-10 py-4 text-white transition-all rounded-full inline-flex items-center gap-3"
+              className="mt-8 px-10 py-4 text-white transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
               style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 fontSize: '12px',
@@ -843,9 +849,9 @@ export default function App() {
               transition={{ duration: 0.8, delay: 0.2 }}
               className="mb-16"
             >
-              <div className="grid lg:grid-cols-[1fr,400px] gap-8">
+              <div className="grid lg:grid-cols-[1fr,minmax(280px,400px)] gap-8 min-w-0">
                 {/* Wardrobe Grid Section */}
-                <div className="p-8 md:p-12 rounded-3xl"
+                <div className="p-8 md:p-12 rounded-3xl min-w-0"
                   style={{
                     background: 'rgba(255, 255, 255, 0.7)',
                     border: '3px solid #000',
@@ -862,7 +868,7 @@ export default function App() {
                             <button
                               key={category}
                               onClick={() => handleCategoryChange(category)}
-                              className="px-4 py-2 rounded-full transition-all"
+                              className="px-4 py-2 rounded-full transition-colors duration-200 ease-out"
                               style={{
                                 background: selectedCategory === category ? '#000' : '#FFE5C8',
                                 color: selectedCategory === category ? '#fff' : '#000',
@@ -917,10 +923,10 @@ export default function App() {
                         onClick={() => handleItemClick(item)}
                       >
                         <div
-                          className={`aspect-square bg-white rounded-2xl mb-2 flex items-center justify-center relative overflow-hidden transition-all ${item.imageUrl ? 'p-0' : 'p-3'}`}
+                          className={`aspect-square bg-white rounded-2xl mb-2 flex items-center justify-center relative overflow-hidden transition-[border-color,box-shadow] duration-200 ease-out ${item.imageUrl ? 'p-0' : 'p-3'}`}
                           style={{
-                            border: isSelected ? '3px solid #667eea' : '2px solid rgba(0, 0, 0, 0.1)',
-                            boxShadow: isSelected ? '0 4px 16px rgba(102, 126, 234, 0.4)' : 'none'
+                            border: isSelected ? '3px solid #667eea' : '2px solid rgba(0, 0, 0, 0.12)',
+                            boxShadow: isSelected ? '0 4px 16px rgba(102, 126, 234, 0.35)' : '0 1px 0 rgba(0, 0, 0, 0.06)'
                           }}
                         >
                           {item.imageUrl ? (
@@ -943,7 +949,7 @@ export default function App() {
                             </div>
                           )}
                         </div>
-                        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', lineHeight: 1.3 }}>
+                        <div className="break-words line-clamp-3 text-center px-0.5" style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', lineHeight: 1.3 }}>
                           {item.title
                             ? `${item.title.length > 28 ? `${item.title.slice(0, 28)}…` : item.title}`
                             : item.code}
@@ -955,13 +961,13 @@ export default function App() {
 
                         {/* Pagination Controls */}
                         {getPaginatedItems(selectedCategory).totalPages > 1 && (
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-between">
                             <motion.button
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
                               onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
                               disabled={!getPaginatedItems(selectedCategory).hasPrev}
-                              className="px-6 py-3 rounded-full flex items-center gap-2 disabled:opacity-30"
+                              className="px-6 py-3 rounded-full flex items-center gap-2 disabled:opacity-30 disabled:grayscale transition-opacity duration-200 ease-out order-1 sm:order-none"
                               style={{
                                 background: '#FFE5C8',
                                 border: '2px solid #000',
@@ -974,15 +980,17 @@ export default function App() {
                               PREV
                             </motion.button>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center justify-center gap-2 max-w-full py-1 basis-full sm:basis-auto order-3 sm:order-none">
                               {Array.from({ length: getPaginatedItems(selectedCategory).totalPages }).map((_, idx) => (
                                 <button
                                   key={idx}
                                   onClick={() => setCurrentPage(idx)}
-                                  className="w-3 h-3 rounded-full transition-all"
+                                  className="w-3 h-3 rounded-full transition-[background-color,transform] duration-200 ease-out hover:scale-125"
                                   style={{
                                     background: idx === currentPage ? '#000' : 'rgba(0, 0, 0, 0.2)'
                                   }}
+                                  aria-label={`Page ${idx + 1}`}
+                                  type="button"
                                 />
                               ))}
                             </div>
@@ -992,7 +1000,7 @@ export default function App() {
                               whileTap={{ scale: 0.95 }}
                               onClick={() => setCurrentPage(p => p + 1)}
                               disabled={!getPaginatedItems(selectedCategory).hasNext}
-                              className="px-6 py-3 rounded-full flex items-center gap-2 disabled:opacity-30"
+                              className="px-6 py-3 rounded-full flex items-center gap-2 disabled:opacity-30 disabled:grayscale transition-opacity duration-200 ease-out order-2 sm:order-none"
                               style={{
                                 background: '#FFE5C8',
                                 border: '2px solid #000',
@@ -1012,7 +1020,7 @@ export default function App() {
                 </div>
 
               {/* Model Preview - Always Visible */}
-              <div className="lg:sticky lg:top-24 lg:self-start">
+              <div className="lg:sticky lg:top-24 lg:self-start min-w-0 w-full">
                 <motion.div
                   initial={false}
                   whileInView={{ opacity: 1, x: 0 }}
@@ -1025,8 +1033,8 @@ export default function App() {
                     boxShadow: '12px 12px 0 #000'
                   }}
                 >
-                  <div className="mb-4 text-center flex items-center justify-between">
-                    <div className="inline-block px-4 py-2 rounded-full" style={{
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-2 min-w-0">
+                    <div className="inline-block px-4 py-2 rounded-full shrink-0" style={{
                       background: '#FFE5C8',
                       border: '2px solid #000'
                     }}>
@@ -1037,11 +1045,12 @@ export default function App() {
                     {userSelfie && (
                       <button
                         onClick={() => setShowSelfieUpload(true)}
-                        className="p-2 rounded-full hover:opacity-60 transition-opacity"
+                        className="p-2 rounded-full hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out"
                         style={{
                           background: 'rgba(0, 0, 0, 0.05)'
                         }}
                         title="Change photo"
+                        type="button"
                       >
                         <Camera className="w-4 h-4" strokeWidth={2} />
                       </button>
@@ -1154,7 +1163,7 @@ export default function App() {
                       <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '4px', opacity: 0.6 }}>
                         TOP
                       </div>
-                      <div style={{ fontSize: '12px', fontWeight: 600 }}>
+                      <div className="break-words" style={{ fontSize: '12px', fontWeight: 600 }}>
                         {selectedOutfit.tops ? selectedOutfit.tops.code : 'None selected'}
                       </div>
                     </div>
@@ -1166,7 +1175,7 @@ export default function App() {
                       <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '4px', opacity: 0.6 }}>
                         BOTTOM
                       </div>
-                      <div style={{ fontSize: '12px', fontWeight: 600 }}>
+                      <div className="break-words" style={{ fontSize: '12px', fontWeight: 600 }}>
                         {selectedOutfit.bottoms ? selectedOutfit.bottoms.code : 'None selected'}
                       </div>
                     </div>
@@ -1178,7 +1187,7 @@ export default function App() {
                       <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '4px', opacity: 0.6 }}>
                         ACCESSORY
                       </div>
-                      <div style={{ fontSize: '12px', fontWeight: 600 }}>
+                      <div className="break-words" style={{ fontSize: '12px', fontWeight: 600 }}>
                         {selectedOutfit.accessories ? selectedOutfit.accessories.code : 'None selected'}
                       </div>
                     </div>
@@ -1342,20 +1351,20 @@ export default function App() {
                           )}
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 min-w-0">
                           {outfit.tops && (
-                            <div className="text-xs font-semibold">Top: {outfit.tops.code}</div>
+                            <div className="text-xs font-semibold break-words">Top: {outfit.tops.code}</div>
                           )}
                           {outfit.bottoms && (
-                            <div className="text-xs font-semibold">Bottom: {outfit.bottoms.code}</div>
+                            <div className="text-xs font-semibold break-words">Bottom: {outfit.bottoms.code}</div>
                           )}
                           {outfit.accessories && (
-                            <div className="text-xs font-semibold">Accessory: {outfit.accessories.code}</div>
+                            <div className="text-xs font-semibold break-words">Accessory: {outfit.accessories.code}</div>
                           )}
                         </div>
 
-                        <div className="mt-4 pt-4 border-t-2 border-black/10 flex items-center justify-between">
-                          <span style={{ fontSize: '10px', opacity: 0.6, fontWeight: 600 }}>
+                        <div className="mt-4 pt-4 border-t-2 border-black/10 flex flex-wrap items-center justify-between gap-2">
+                          <span className="break-words" style={{ fontSize: '10px', opacity: 0.6, fontWeight: 600 }}>
                             {new Date(outfit.savedAt).toLocaleDateString()}
                           </span>
                           <button
@@ -1363,7 +1372,8 @@ export default function App() {
                               setSavedOutfits(prev => prev.filter(o => o.id !== outfit.id));
                               showToast('Outfit removed');
                             }}
-                            className="text-xs font-bold hover:opacity-60 transition-opacity"
+                            className="text-xs font-bold hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm px-1 -mx-1"
+                            type="button"
                           >
                             DELETE
                           </button>
@@ -1601,7 +1611,7 @@ export default function App() {
             boxShadow: '12px 12px 0 rgba(0, 0, 0, 0.3)'
           }}
         >
-          <h2 className="mb-6" style={{
+          <h2 className="mb-6 break-words hyphens-auto px-1" style={{
             fontSize: 'clamp(36px, 6vw, 64px)',
             fontWeight: 900,
             lineHeight: 1.1,
@@ -1648,7 +1658,7 @@ export default function App() {
           <motion.button
             whileHover={{ scale: 1.05, y: -4 }}
             whileTap={{ scale: 0.98 }}
-            className="px-12 py-5 text-white transition-all rounded-full inline-flex items-center gap-3"
+            className="px-12 py-5 text-white transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
             style={{
               background: '#000',
               fontSize: '13px',
@@ -1673,12 +1683,14 @@ export default function App() {
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={() => setShowChat(true)}
-            className="fixed bottom-8 right-8 z-50 w-16 h-16 rounded-full flex items-center justify-center shadow-2xl"
+            className="fixed bottom-8 right-8 z-[60] w-16 h-16 rounded-full flex items-center justify-center shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-shadow duration-200 ease-out"
             style={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               color: '#fff',
               border: '3px solid #000'
             }}
+            type="button"
+            aria-label="Open AI stylist chat"
           >
             <MessageCircle className="w-7 h-7" strokeWidth={2.5} />
           </motion.button>
@@ -1690,12 +1702,14 @@ export default function App() {
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={() => setShowUpload(true)}
-            className="fixed bottom-28 right-8 z-50 w-14 h-14 rounded-full flex items-center justify-center shadow-2xl"
+            className="fixed bottom-28 right-8 z-[60] w-14 h-14 rounded-full flex items-center justify-center shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-shadow duration-200 ease-out"
             style={{
               background: '#000',
               color: '#fff',
               border: '3px solid #000'
             }}
+            type="button"
+            aria-label="Add wardrobe item"
           >
             <Plus className="w-6 h-6" strokeWidth={2.5} />
           </motion.button>
@@ -1750,16 +1764,17 @@ export default function App() {
             initial={false}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 50 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] px-6 py-4 rounded-full flex items-center gap-3"
+            className="fixed left-1/2 -translate-x-1/2 z-[220] px-4 sm:px-6 py-3 sm:py-4 rounded-full flex items-center justify-center gap-3 shadow-[0_10px_40px_rgba(0,0,0,0.22)] transition-[opacity,transform] duration-300 ease-out max-w-[min(calc(100vw-2rem),24rem)] bottom-24 sm:bottom-8"
             style={{
               background: toast.type === 'success' ? '#000' : '#dc2626',
               color: '#fff',
               border: '2px solid #000',
               boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)'
             }}
+            role="status"
           >
-            {toast.type === 'success' && <Check className="w-5 h-5" strokeWidth={2.5} />}
-            <span style={{ fontSize: '14px', fontWeight: 700 }}>
+            {toast.type === 'success' && <Check className="w-5 h-5 shrink-0" strokeWidth={2.5} />}
+            <span className="text-center break-words text-balance" style={{ fontSize: '14px', fontWeight: 700 }}>
               {toast.message}
             </span>
           </motion.div>
@@ -1787,7 +1802,7 @@ export default function App() {
               <ul className="space-y-2">
                 {['Features', 'Pricing', 'Demo', 'Download'].map(item => (
                   <li key={item}>
-                    <a href="#" className="hover:opacity-60 transition-opacity" style={{ fontSize: '13px', fontWeight: 500 }}>
+                    <a href="#" className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block" style={{ fontSize: '13px', fontWeight: 500 }}>
                       {item}
                     </a>
                   </li>
@@ -1800,7 +1815,7 @@ export default function App() {
               <ul className="space-y-2">
                 {['About', 'Blog', 'Careers', 'Contact'].map(item => (
                   <li key={item}>
-                    <a href="#" className="hover:opacity-60 transition-opacity" style={{ fontSize: '13px', fontWeight: 500 }}>
+                    <a href="#" className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block" style={{ fontSize: '13px', fontWeight: 500 }}>
                       {item}
                     </a>
                   </li>
@@ -1813,7 +1828,7 @@ export default function App() {
               <ul className="space-y-2">
                 {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map(item => (
                   <li key={item}>
-                    <a href="#" className="hover:opacity-60 transition-opacity" style={{ fontSize: '13px', fontWeight: 500 }}>
+                    <a href="#" className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block" style={{ fontSize: '13px', fontWeight: 500 }}>
                       {item}
                     </a>
                   </li>

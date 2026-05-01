@@ -82,7 +82,7 @@ export function OnboardingFlow({ onComplete, userName }: OnboardingFlowProps) {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <h1 className="mb-4" style={{
+              <h1 className="mb-4 px-2 break-words" style={{
                 fontSize: 'clamp(36px, 6vw, 56px)',
                 fontWeight: 900,
                 lineHeight: 1,
@@ -114,7 +114,7 @@ export function OnboardingFlow({ onComplete, userName }: OnboardingFlowProps) {
           {steps.map((_, idx) => (
             <div
               key={idx}
-              className="h-2 rounded-full transition-all duration-300"
+              className="h-2 rounded-full transition-[width,background-color] duration-300 ease-out"
               style={{
                 width: idx === step ? '40px' : '8px',
                 background: idx === step ? '#000' : 'rgba(0, 0, 0, 0.2)'
@@ -163,7 +163,8 @@ export function OnboardingFlow({ onComplete, userName }: OnboardingFlowProps) {
 
         <button
           onClick={onComplete}
-          className="mt-8 w-full text-center hover:opacity-60 transition-opacity"
+          type="button"
+          className="mt-8 w-full text-center hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm"
           style={{
             fontSize: '12px',
             fontWeight: 600,
