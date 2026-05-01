@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 import { buildFallbackSuggestion } from "@/lib/outfit-fallback";
+import { wantsOutfitRecommendation } from "@/lib/outfit-intent";
 
 const requestSchema = z.object({
   message: z.string().min(1),
@@ -15,7 +16,14 @@ const requestSchema = z.object({
 
 type ProviderResult = { reply: string };
 
-async function callOpenAI(prompt: string): Promise<ProviderResult> {
+function stylistSystemPrompt(outfitMode: boolean): string {
+  if (outfitMode) {
+    return "You are an AI fashion stylist. The user wants outfit help. Give concise, practical advice for their plans and the weather. No markdown headings.";
+  }
+  return "You are a friendly AI fashion stylist chatting with the user. They are NOT asking for a full outfit yet (greeting, small talk, or general question). Reply warmly and briefly—one or two short paragraphs max. Do NOT list specific garments, SKUs, or a full outfit. If it fits naturally, invite them to share their plans or occasion when they want concrete suggestions. No markdown headings.";
+}
+
+async function callOpenAI(prompt: string, outfitMode: boolean): Promise<ProviderResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
 
@@ -26,8 +34,7 @@ async function callOpenAI(prompt: string): Promise<ProviderResult> {
     messages: [
       {
         role: "system",
-        content:
-          "You are an AI fashion stylist. Give concise, practical outfit advice for the user's plans and weather. No markdown headings.",
+        content: stylistSystemPrompt(outfitMode),
       },
       { role: "user", content: prompt },
     ],
@@ -48,7 +55,7 @@ function resolveAiProvider(): "openai" | "gemini" {
   return "openai";
 }
 
-async function callGemini(prompt: string): Promise<ProviderResult> {
+async function callGemini(prompt: string, outfitMode: boolean): Promise<ProviderResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
@@ -56,7 +63,8 @@ async function callGemini(prompt: string): Promise<ProviderResult> {
   const modelId = process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash";
   const client = new GoogleGenerativeAI(apiKey);
   const model = client.getGenerativeModel({ model: modelId });
-  const result = await model.generateContent(prompt);
+  const fullPrompt = `${stylistSystemPrompt(outfitMode)}\n\n${prompt}`;
+  const result = await model.generateContent(fullPrompt);
   const reply = result.response.text().trim();
   if (!reply) throw new Error("Gemini response empty");
   return { reply };
@@ -70,14 +78,16 @@ export async function POST(request: NextRequest) {
     }
 
     const { message, location, weather } = parsed.data;
+    const outfitMode = wantsOutfitRecommendation(message);
     const fallback = buildFallbackSuggestion(message, weather.temp, weather.condition);
 
     const prompt = [
-      "You are an AI fashion stylist.",
       `User location: ${location}.`,
       `Weather: ${weather.temp}C and ${weather.condition}.`,
       `User message: ${message}`,
-      "Give concise recommendations with practical reasoning.",
+      outfitMode
+        ? "Give concise recommendations with practical reasoning."
+        : "Respond conversationally only—no outfit rundown unless they ask.",
     ].join("\n");
 
     let reply: string | null = null;
@@ -85,14 +95,14 @@ export async function POST(request: NextRequest) {
 
     const tryOpenAI = async () => {
       try {
-        reply = (await callOpenAI(prompt)).reply;
+        reply = (await callOpenAI(prompt, outfitMode)).reply;
       } catch (err) {
         console.error("[chat] OpenAI failed:", err);
       }
     };
     const tryGemini = async () => {
       try {
-        reply = (await callGemini(prompt)).reply;
+        reply = (await callGemini(prompt, outfitMode)).reply;
       } catch (err) {
         console.error("[chat] Gemini failed:", err);
       }
@@ -108,13 +118,16 @@ export async function POST(request: NextRequest) {
 
     const trimmedReply = (reply ?? "").trim();
     const usedRuleBased = !trimmedReply;
+
     const replyText = usedRuleBased
-      ? `${fallback.reason} The picks below match your plans and the weather.`
+      ? outfitMode
+        ? `${fallback.reason} The picks below match your plans and the weather.`
+        : `Hey! When you’re ready, tell me what you’re doing today or the vibe you want—I’ll pull ideas from your wardrobe. It’s ${weather.temp}°C and ${weather.condition} in ${location} right now.`
       : trimmedReply;
 
     return NextResponse.json({
       reply: replyText,
-      outfitSuggestion: fallback,
+      outfitSuggestion: outfitMode ? fallback : null,
       ...(usedRuleBased ? { stylistMode: "rules" as const } : {}),
     });
   } catch (error) {

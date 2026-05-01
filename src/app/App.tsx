@@ -1753,6 +1753,7 @@ export default function App() {
             onClose={() => setShowChat(false)}
             location={location}
             weather={weather}
+            wardrobeItems={wardrobeItems}
           />
         )}
       </AnimatePresence>
