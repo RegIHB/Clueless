@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import Image from 'next/image';
 import { Send, Sparkles, MapPin, Cloud } from 'lucide-react';
 import { buildFallbackSuggestion } from '@/lib/outfit-fallback';
+import { wantsOutfitRecommendation } from '@/lib/outfit-intent';
+import { getGarmentImage } from '@/lib/garment-images';
+import type { WardrobeItem } from '@/types/wardrobe';
 
 interface Message {
   id: string;
@@ -19,9 +23,51 @@ interface ChatInterfaceProps {
   onClose: () => void;
   location: string;
   weather: { temp: number; condition: string };
+  wardrobeItems: WardrobeItem[];
 }
 
-export function ChatInterface({ onClose, location, weather }: ChatInterfaceProps) {
+function SuggestedPiecesRow({
+  label,
+  codes,
+  byCode,
+}: {
+  label: string;
+  codes: string[];
+  byCode: Map<string, WardrobeItem>;
+}) {
+  if (codes.length === 0) return null;
+  return (
+    <div className="min-w-0">
+      <div style={{ fontSize: '9px', fontWeight: 700, opacity: 0.65, marginBottom: 6, letterSpacing: '0.06em' }}>
+        {label}
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-0.5 px-0.5" style={{ scrollbarWidth: 'thin' }}>
+        {codes.map((code) => {
+          const item = byCode.get(code);
+          const src = item?.imageUrl ?? getGarmentImage(item?.type);
+          const caption = (item?.title || item?.type || code).trim();
+          return (
+            <div key={code} className="w-[4.5rem] shrink-0 text-center">
+              <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-neutral-100 border-2 border-black">
+                <Image src={src} alt={caption} fill className="object-cover" sizes="72px" unoptimized />
+              </div>
+              <p className="mt-1 px-0.5 break-words line-clamp-2" style={{ fontSize: '10px', fontWeight: 600, lineHeight: 1.25 }}>
+                {caption}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function ChatInterface({ onClose, location, weather, wardrobeItems }: ChatInterfaceProps) {
+  const itemsByCode = useMemo(() => {
+    const m = new Map<string, WardrobeItem>();
+    for (const it of wardrobeItems) m.set(it.code, it);
+    return m;
+  }, [wardrobeItems]);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -65,20 +111,34 @@ export function ChatInterface({ onClose, location, weather }: ChatInterfaceProps
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: payload.reply,
-        outfitSuggestion: payload.outfitSuggestion
       };
+      if (payload.outfitSuggestion != null && typeof payload.outfitSuggestion === 'object') {
+        assistantMessage.outfitSuggestion = payload.outfitSuggestion;
+      }
       setMessages(prev => [...prev, assistantMessage]);
     } catch {
-      const offline = buildFallbackSuggestion(messageText, weather.temp, weather.condition);
-      setMessages(prev => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: `${offline.reason} (Couldn't reach the server—showing a local suggestion.) The picks below match your message and weather.`,
-          outfitSuggestion: offline
-        }
-      ]);
+      if (!wantsOutfitRecommendation(messageText)) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content:
+              "I couldn't reach the server just now. Feel free to keep chatting—when you want outfit ideas, tell me your plans or the occasion.",
+          },
+        ]);
+      } else {
+        const offline = buildFallbackSuggestion(messageText, weather.temp, weather.condition);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `${offline.reason} (Couldn't reach the server—showing a local suggestion.) The picks below match your message and weather.`,
+            outfitSuggestion: offline,
+          },
+        ]);
+      }
     } finally {
       setIsThinking(false);
     }
@@ -168,30 +228,13 @@ export function ChatInterface({ onClose, location, weather }: ChatInterfaceProps
                   {message.outfitSuggestion && (
                     <div className="mt-4 space-y-3">
                       <div className="p-3 rounded-xl bg-white border-2 border-black">
-                        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 10 }}>
                           RECOMMENDED OUTFIT
                         </div>
-                        <div className="space-y-2">
-                          <div>
-                            <span style={{ fontSize: '9px', fontWeight: 700, opacity: 0.6 }}>TOPS: </span>
-                            <span style={{ fontSize: '12px', fontWeight: 600 }}>
-                              {message.outfitSuggestion.tops.join(', ')}
-                            </span>
-                          </div>
-                          <div>
-                            <span style={{ fontSize: '9px', fontWeight: 700, opacity: 0.6 }}>BOTTOMS: </span>
-                            <span style={{ fontSize: '12px', fontWeight: 600 }}>
-                              {message.outfitSuggestion.bottoms.join(', ')}
-                            </span>
-                          </div>
-                          {message.outfitSuggestion.accessories.length > 0 && (
-                            <div>
-                              <span style={{ fontSize: '9px', fontWeight: 700, opacity: 0.6 }}>ACCESSORIES: </span>
-                              <span style={{ fontSize: '12px', fontWeight: 600 }}>
-                                {message.outfitSuggestion.accessories.join(', ')}
-                              </span>
-                            </div>
-                          )}
+                        <div className="space-y-4">
+                          <SuggestedPiecesRow label="TOPS" codes={message.outfitSuggestion.tops} byCode={itemsByCode} />
+                          <SuggestedPiecesRow label="BOTTOMS" codes={message.outfitSuggestion.bottoms} byCode={itemsByCode} />
+                          <SuggestedPiecesRow label="ACCESSORIES" codes={message.outfitSuggestion.accessories} byCode={itemsByCode} />
                         </div>
                       </div>
                     </div>
