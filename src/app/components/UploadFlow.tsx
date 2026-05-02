@@ -246,8 +246,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               className="space-y-5"
             >
               <p style={{ fontSize: '15px', fontWeight: 500, lineHeight: 1.6 }}>
-                Search by product name or style. Tap a result to select it, then continue to
-                categorize it for your wardrobe.
+                Search for clothing and wearable accessories (tops, bottoms, shoes, bags, etc.).
+                Results are filtered to fashion and apparel. Tap a result, then categorize it.
               </p>
 
               <div>
@@ -268,7 +268,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   type="search"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="e.g. navy wool peacoat, leather tote bag"
+                  placeholder="e.g. navy wool peacoat, white cotton tee, running sneakers"
                   className="w-full px-4 py-3 rounded-xl outline-none transition-[box-shadow,border-color] duration-200 ease-out"
                   style={{
                     border: '3px solid #000',
@@ -282,8 +282,15 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
 
               {pickerSource && (
                 <p style={{ fontSize: '11px', fontWeight: 600, opacity: 0.55 }}>
-                  Results via {pickerSource === 'google' ? 'Google Programmable Search' : 'Openverse'}{' '}
-                  (openly licensed and web images). Respect image licenses when using results.
+                  Results via{' '}
+                  {pickerSource === 'serpapi'
+                    ? 'Google Shopping (SerpApi)'
+                    : pickerSource === 'google'
+                      ? 'Google Programmable Search'
+                      : 'Openverse'}{' '}
+                  {pickerSource === 'serpapi'
+                    ? '— product listings; check retailer for accuracy.'
+                    : '(openly licensed / web images). Respect licenses when using results.'}
                 </p>
               )}
 
@@ -306,7 +313,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 )}
                 {!pickerLoading && !pickerError && debouncedQ && pickerResults.length === 0 && (
                   <p className="text-center py-12" style={{ fontSize: '14px', fontWeight: 500, opacity: 0.55 }}>
-                    No results for that query. Try different keywords.
+                    No clothing results for that query. Try naming the garment (e.g. &ldquo;denim
+                    jacket&rdquo;, &ldquo;pleated skirt&rdquo;).
                   </p>
                 )}
                 {!pickerLoading && pickerResults.length > 0 && (

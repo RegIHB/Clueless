@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera } from 'lucide-react';
+import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 import { ClothingIcon } from './components/ClothingIcon';
 import { ClothingSticker } from './components/ClothingSticker';
@@ -11,7 +12,9 @@ import { OnboardingFlow } from './components/OnboardingFlow';
 import { UploadFlow } from './components/UploadFlow';
 import { EmptyState } from './components/EmptyState';
 import { SelfieUpload } from './components/SelfieUpload';
+import { AuthDialog } from './components/AuthDialog';
 import { getGarmentImage } from '@/lib/garment-images';
+import { getWardrobeStorageState, storage } from '@/lib/storage';
 import { WARDROBE_TEST_ITEMS } from '@/lib/wardrobe-test-data';
 import {
   createBrowserSupabaseClient,
@@ -19,22 +22,64 @@ import {
 } from '@/lib/supabase/client';
 import {
   countWardrobeItems,
-  ensureAnonymousSession,
   fetchProfile,
   fetchSavedOutfits,
   fetchWardrobe,
   insertSavedOutfit,
+  deleteSavedOutfit,
   insertWardrobeItem,
   seedWardrobeFromDemo,
   ensureProfileRow,
   updateProfile,
 } from '@/lib/supabase/sync';
+import type { Session } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
 
 const SUPABASE_ON = isSupabaseConfigured();
 
+const LOCAL_SAVED_OUTFITS_KEY = 'clueless_saved_outfits_v1';
+
+function loadLocalSavedOutfits(): SavedOutfit[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_SAVED_OUTFITS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as SavedOutfit[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((o) => ({
+      ...o,
+      savedAt: o.savedAt instanceof Date ? o.savedAt : new Date(String(o.savedAt)),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function isPersistedOutfitId(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
+function wardrobeItemLabel(item: WardrobeItem | undefined): string {
+  if (!item) return '';
+  const t = item.title?.trim();
+  return t || item.code;
+}
+
+/** Merge saved snapshot with current wardrobe so thumbnails/titles stay up to date. */
+function hydrateSavedOutfitFromWardrobe(outfit: SavedOutfit, wardrobe: WardrobeItem[]): SavedOutfit {
+  const byCode = new Map(wardrobe.map((i) => [i.code, i]));
+  return {
+    ...outfit,
+    tops: outfit.tops ? byCode.get(outfit.tops.code) ?? outfit.tops : undefined,
+    bottoms: outfit.bottoms ? byCode.get(outfit.bottoms.code) ?? outfit.bottoms : undefined,
+    accessories: outfit.accessories ? byCode.get(outfit.accessories.code) ?? outfit.accessories : undefined,
+  };
+}
+
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const router = useRouter();
+  const [isLoggedIn, setIsLoggedIn] = useState(!SUPABASE_ON);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<WardrobeCategory>('tops');
@@ -50,7 +95,11 @@ export default function App() {
   const [location, setLocation] = useState('Berlin');
   const [weather, setWeather] = useState({ temp: 12, condition: 'Cloudy' });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [savedOutfits, setSavedOutfits] = useState<SavedOutfit[]>([]);
+  const [savedOutfits, setSavedOutfits] = useState<SavedOutfit[]>(() =>
+    SUPABASE_ON ? [] : loadLocalSavedOutfits()
+  );
+  const [savedOutfitsLoading, setSavedOutfitsLoading] = useState(false);
+  const [deletingOutfitId, setDeletingOutfitId] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'wardrobe' | 'outfits'>('wardrobe');
   const [currentPage, setCurrentPage] = useState(0);
   const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
@@ -64,97 +113,285 @@ export default function App() {
     SUPABASE_ON ? [] : [...WARDROBE_TEST_ITEMS]
   );
 
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const mountedRef = useRef(true);
+  /** Set whenever Supabase session is verified; used for synchronous localStorage writes (no async getSession race). */
+  const wardrobeUserIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!SUPABASE_ON) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const supabase = createBrowserSupabaseClient();
-        const session = await ensureAnonymousSession(supabase);
-        const userId = session.user.id;
-
-        let profile = await fetchProfile(supabase, userId);
-        if (!profile) {
-          await ensureProfileRow(supabase, userId);
-          profile = await fetchProfile(supabase, userId);
-        }
-        if (cancelled) return;
-
-        if (profile) {
-          setUserName(profile.display_name || 'Alex');
-          setHasCompletedOnboarding(profile.onboarding_completed);
-          if (profile.selfie_url) setUserSelfie(profile.selfie_url);
-        }
-
-        const n = await countWardrobeItems(supabase, userId);
-        if (n === 0) {
-          await seedWardrobeFromDemo(supabase, userId, WARDROBE_TEST_ITEMS);
-        }
-        const items = await fetchWardrobe(supabase, userId);
-        if (!cancelled) setWardrobeItems(items);
-
-        const outfits = await fetchSavedOutfits(supabase, userId);
-        if (!cancelled) setSavedOutfits(outfits);
-      } catch (e) {
-        console.error('Supabase bootstrap failed', e);
-        if (!cancelled) {
-          setWardrobeItems([...WARDROBE_TEST_ITEMS]);
-          setSupabaseReady(true);
-          return;
-        }
-      } finally {
-        if (!cancelled) setSupabaseReady(true);
-      }
-    })();
+    mountedRef.current = true;
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
   }, []);
 
-  const handleLogin = async () => {
+  const hydrateRemoteUser = useCallback(async (userId: string): Promise<boolean> => {
+    const supabase = createBrowserSupabaseClient();
+    await supabase.auth.refreshSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const uid = session?.user?.id;
+    if (!uid || uid !== userId) {
+      console.error('hydrateRemoteUser: no valid session after refresh', {
+        expected: userId,
+        got: uid,
+      });
+      return false;
+    }
+    wardrobeUserIdRef.current = uid;
+
+    let profile = await fetchProfile(supabase, uid);
+    if (!profile) {
+      await ensureProfileRow(supabase, uid);
+      profile = await fetchProfile(supabase, uid);
+    }
+    if (!mountedRef.current) return true;
+
+    if (profile) {
+      setUserName(profile.display_name || 'Alex');
+      setHasCompletedOnboarding(profile.onboarding_completed);
+      if (profile.selfie_url) setUserSelfie(profile.selfie_url);
+      else setUserSelfie(null);
+    }
+
+    // Local-first wardrobe (same idea as Clueless). Distinguish "never saved" vs "user cleared closet".
+    const localState = getWardrobeStorageState(uid);
+    if (localState.kind === 'items') {
+      setWardrobeItems(localState.items);
+    } else if (localState.kind === 'empty') {
+      setWardrobeItems([]);
+    } else {
+      const n = await countWardrobeItems(supabase, uid);
+      if (n === 0) {
+        await seedWardrobeFromDemo(supabase, uid, WARDROBE_TEST_ITEMS);
+      }
+      const items = await fetchWardrobe(supabase, uid);
+      if (!mountedRef.current) return true;
+      if (items === null) {
+        console.error('fetchWardrobe failed — wardrobe not updated');
+      } else {
+        setWardrobeItems(items);
+        storage.setWardrobe(uid, items);
+      }
+    }
+
+    const outfits = await fetchSavedOutfits(supabase, uid);
+    if (!mountedRef.current) return true;
+    if (outfits === null) {
+      console.error('fetchSavedOutfits failed — saved outfits not updated');
+    } else {
+      setSavedOutfits(outfits);
+    }
+    return true;
+  }, []);
+
+  const clearRemoteSessionState = useCallback(() => {
+    wardrobeUserIdRef.current = null;
+    setIsLoggedIn(false);
+    setLocation('Berlin');
+    setWeather({ temp: 12, condition: 'Cloudy' });
+    setSavedOutfits([]);
+    setWardrobeItems([]);
+    setSelectedOutfit({});
+    setUserSelfie(null);
+    setUserName('Alex');
+    setHasCompletedOnboarding(false);
+    setShowOnboarding(false);
+    setCurrentView('wardrobe');
+  }, []);
+
+  const handleAuthDialogSignedIn = useCallback(async () => {
+    const supabase = createBrowserSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
     setIsLoggedIn(true);
+    wardrobeUserIdRef.current = user.id;
+    const wState = getWardrobeStorageState(user.id);
+    if (wState.kind === 'items') {
+      setWardrobeItems(wState.items);
+    } else if (wState.kind === 'empty') {
+      setWardrobeItems([]);
+    }
+    try {
+      const ok = await hydrateRemoteUser(user.id);
+      if (!ok) {
+        clearRemoteSessionState();
+        showToast('Session could not be restored. Please sign in again.', 'error');
+        router.refresh();
+        return;
+      }
+    } catch (e) {
+      console.error('Post sign-in sync failed', e);
+      setWardrobeItems([...WARDROBE_TEST_ITEMS]);
+    }
+    router.refresh();
+  }, [hydrateRemoteUser, router, clearRemoteSessionState]);
+
+  useEffect(() => {
     if (!SUPABASE_ON) return;
+    let cancelled = false;
+    const supabase = createBrowserSupabaseClient();
+
+    async function readSessionWithRetry(): Promise<Session | null> {
+      await supabase.auth.refreshSession().catch(() => {});
+      const readOnce = async () => (await supabase.auth.getSession()).data.session;
+      let session = await readOnce();
+      if (session?.user) return session;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
+        session = await readOnce();
+        if (session?.user) return session;
+      }
+      return session;
+    }
+
+    async function bootstrapFromStorage() {
+      const session = await readSessionWithRetry();
+      if (cancelled) return;
+      if (session?.user) {
+        setIsLoggedIn(true);
+        wardrobeUserIdRef.current = session.user.id;
+        const wState = getWardrobeStorageState(session.user.id);
+        if (wState.kind === 'items') {
+          setWardrobeItems(wState.items);
+        } else if (wState.kind === 'empty') {
+          setWardrobeItems([]);
+        }
+        try {
+          const ok = await hydrateRemoteUser(session.user.id);
+          if (!ok && !cancelled) clearRemoteSessionState();
+        } catch (e) {
+          console.error('Supabase bootstrap failed', e);
+          if (!cancelled) setWardrobeItems([...WARDROBE_TEST_ITEMS]);
+        }
+      } else {
+        clearRemoteSessionState();
+      }
+      if (!cancelled) setSupabaseReady(true);
+    }
+
+    void bootstrapFromStorage();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (cancelled) return;
+
+      // Storage is loaded via getSession() + retry above. INITIAL_SESSION often races before
+      // cookie storage is readable and would hydrate with no user, wiping data after refresh.
+      if (event === 'INITIAL_SESSION') {
+        return;
+      }
+
+      if (event === 'SIGNED_IN') {
+        setIsLoggedIn(true);
+        if (session?.user) {
+          try {
+            const ok = await hydrateRemoteUser(session.user.id);
+            if (!ok) clearRemoteSessionState();
+          } catch (e) {
+            console.error('SIGNED_IN hydrate failed', e);
+          }
+        }
+        router.refresh();
+        return;
+      }
+
+      if (event === 'SIGNED_OUT') {
+        clearRemoteSessionState();
+        router.refresh();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [hydrateRemoteUser, router, clearRemoteSessionState]);
+
+  useEffect(() => {
+    if (SUPABASE_ON) return;
+    try {
+      localStorage.setItem(LOCAL_SAVED_OUTFITS_KEY, JSON.stringify(savedOutfits));
+    } catch (e) {
+      console.error('Could not persist saved outfits locally', e);
+    }
+  }, [savedOutfits]);
+
+  useEffect(() => {
+    if (!SUPABASE_ON || !isLoggedIn || !supabaseReady) return;
+    const uid = wardrobeUserIdRef.current;
+    if (!uid) return;
+    storage.setWardrobe(uid, wardrobeItems);
+  }, [wardrobeItems, isLoggedIn, supabaseReady]);
+
+  const refreshSavedOutfits = async () => {
+    if (!SUPABASE_ON || !isLoggedIn) return;
+    setSavedOutfitsLoading(true);
     try {
       const supabase = createBrowserSupabaseClient();
-      await ensureAnonymousSession(supabase);
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-
-      let profile = await fetchProfile(supabase, user.id);
-      if (!profile) {
-        await ensureProfileRow(supabase, user.id);
-        profile = await fetchProfile(supabase, user.id);
+      const list = await fetchSavedOutfits(supabase, user.id);
+      if (list === null) {
+        showToast('Could not load saved outfits. Check your connection and try again.', 'error');
+        return;
       }
-      if (profile) {
-        setUserName(profile.display_name || 'Alex');
-        setHasCompletedOnboarding(profile.onboarding_completed);
-        if (profile.selfie_url) setUserSelfie(profile.selfie_url);
-      }
-
-      const n = await countWardrobeItems(supabase, user.id);
-      if (n === 0) {
-        await seedWardrobeFromDemo(supabase, user.id, WARDROBE_TEST_ITEMS);
-      }
-      setWardrobeItems(await fetchWardrobe(supabase, user.id));
-      setSavedOutfits(await fetchSavedOutfits(supabase, user.id));
+      setSavedOutfits(list);
     } catch (e) {
-      console.error('Supabase login sync failed', e);
+      console.error('refreshSavedOutfits', e);
+      showToast('Could not refresh saved outfits', 'error');
+    } finally {
+      setSavedOutfitsLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    setIsLoggedIn(false);
-    setSelectedOutfit({});
-    if (SUPABASE_ON) {
-      try {
-        const supabase = createBrowserSupabaseClient();
-        await supabase.auth.signOut();
-      } catch (e) {
-        console.error('Supabase signOut failed', e);
-      }
+  useEffect(() => {
+    if (!SUPABASE_ON || !isLoggedIn || currentView !== 'outfits') return;
+    void refreshSavedOutfits();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when tab opens
+  }, [currentView, SUPABASE_ON, isLoggedIn]);
+
+  const handleLogin = () => {
+    if (!SUPABASE_ON) {
+      setIsLoggedIn(true);
+      setSavedOutfits(loadLocalSavedOutfits());
+      return;
     }
+    setShowAuthDialog(true);
+  };
+
+  const handleLogout = async () => {
+    setSelectedOutfit({});
+    if (!SUPABASE_ON) {
+      setIsLoggedIn(false);
+      setLocation('Berlin');
+      setWeather({ temp: 12, condition: 'Cloudy' });
+      return;
+    }
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Supabase signOut failed', error);
+        showToast('Could not sign out. Try again.', 'error');
+        return;
+      }
+    } catch (e) {
+      console.error('Supabase signOut failed', e);
+      showToast('Could not sign out. Try again.', 'error');
+      return;
+    }
+    clearRemoteSessionState();
+    router.refresh();
   };
 
   useEffect(() => {
@@ -190,6 +427,48 @@ export default function App() {
     };
     void fetchWeather();
   }, [location]);
+
+  const geoRequestedRef = useRef(false);
+
+  /** When logged in, resolve city + weather from the browser geolocation (HTTPS / localhost). */
+  useEffect(() => {
+    if (!isLoggedIn) {
+      geoRequestedRef.current = false;
+      return;
+    }
+    if (typeof window === 'undefined' || !('geolocation' in navigator)) return;
+    if (geoRequestedRef.current) return;
+    geoRequestedRef.current = true;
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+        try {
+          const response = await fetch(
+            `/api/weather?lat=${encodeURIComponent(String(latitude))}&lon=${encodeURIComponent(String(longitude))}`
+          );
+          if (!response.ok) return;
+          const payload = await response.json();
+          if (payload?.city && typeof payload.city === 'string') {
+            setLocation(payload.city);
+          }
+          if (payload?.weather?.tempC != null && payload?.weather?.condition) {
+            setWeather({
+              temp: payload.weather.tempC,
+              condition: payload.weather.condition,
+            });
+          }
+        } catch {
+          // keep prior location / weather
+        }
+      },
+      () => {
+        // Permission denied or timeout — keep default location (e.g. Berlin).
+      },
+      { enableHighAccuracy: false, maximumAge: 300_000, timeout: 20_000 }
+    );
+  }, [isLoggedIn]);
 
   // Prompt for selfie if not uploaded and wardrobe has items
   useEffect(() => {
@@ -241,42 +520,99 @@ export default function App() {
     }
   };
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+  const handleSaveOutfit = async () => {
+    if (!selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.accessories) {
+      showToast('Select at least one piece (top, bottom, or accessory) to save.', 'error');
+      return;
+    }
+
+    const savedAt = new Date();
+    let id: string;
+
+    if (SUPABASE_ON) {
+      try {
+        const supabase = createBrowserSupabaseClient();
+        await supabase.auth.refreshSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user) {
+          showToast('Sign in to save outfits', 'error');
+          return;
+        }
+        const inserted = await insertSavedOutfit(supabase, session.user.id, {
+          tops: selectedOutfit.tops,
+          bottoms: selectedOutfit.bottoms,
+          accessories: selectedOutfit.accessories,
+          savedAt,
+        });
+        if ('error' in inserted) {
+          showToast(`Could not save outfit: ${inserted.error}`, 'error');
+          return;
+        }
+        id = inserted.id;
+      } catch (e) {
+        console.error('Failed to save outfit remotely', e);
+        showToast('Could not save outfit — try again', 'error');
+        return;
+      }
+    } else {
+      id = `${Date.now()}`;
+    }
+
+    const newOutfit: SavedOutfit = {
+      id,
+      tops: selectedOutfit.tops,
+      bottoms: selectedOutfit.bottoms,
+      accessories: selectedOutfit.accessories,
+      savedAt,
+    };
+    setSavedOutfits((prev) => [newOutfit, ...prev]);
+    showToast('Outfit saved successfully!');
   };
 
-  const handleSaveOutfit = async () => {
-    if (!selectedOutfit.tops && !selectedOutfit.bottoms) return;
+  const handleApplySavedOutfit = (outfit: SavedOutfit) => {
+    const hydrated = hydrateSavedOutfitFromWardrobe(outfit, wardrobeItems);
+    setSelectedOutfit({
+      tops: hydrated.tops,
+      bottoms: hydrated.bottoms,
+      accessories: hydrated.accessories,
+    });
+    setCurrentView('wardrobe');
+    showToast('Applied to your wardrobe builder');
+  };
 
-    let id = `${Date.now()}`;
-    if (SUPABASE_ON) {
+  const handleDeleteSavedOutfit = async (outfit: SavedOutfit) => {
+    const label =
+      wardrobeItemLabel(outfit.tops) ||
+      wardrobeItemLabel(outfit.bottoms) ||
+      wardrobeItemLabel(outfit.accessories) ||
+      'this outfit';
+    if (!window.confirm(`Remove “${label}” from saved outfits? This cannot be undone.`)) return;
+
+    if (SUPABASE_ON && isPersistedOutfitId(outfit.id)) {
+      setDeletingOutfitId(outfit.id);
       try {
         const supabase = createBrowserSupabaseClient();
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (user) {
-          const inserted = await insertSavedOutfit(supabase, user.id, {
-            tops: selectedOutfit.tops,
-            bottoms: selectedOutfit.bottoms,
-            accessories: selectedOutfit.accessories,
-            savedAt: new Date(),
-          });
-          if (inserted) id = inserted;
+        if (!user) {
+          showToast('Sign in to manage saved outfits', 'error');
+          return;
         }
-      } catch (e) {
-        console.error('Failed to save outfit remotely', e);
+        const ok = await deleteSavedOutfit(supabase, user.id, outfit.id);
+        if (!ok) {
+          showToast('Could not delete outfit — try again', 'error');
+          return;
+        }
+      } finally {
+        setDeletingOutfitId(null);
       }
     }
 
-    const newOutfit: SavedOutfit = {
-      id,
-      ...selectedOutfit,
-      savedAt: new Date(),
-    };
-    setSavedOutfits((prev) => [newOutfit, ...prev]);
-    showToast('Outfit saved successfully!');
+    setSavedOutfits((prev) => prev.filter((o) => o.id !== outfit.id));
+    showToast('Outfit removed');
   };
 
   const handleAddItem = (item: {
@@ -288,8 +624,12 @@ export default function App() {
     attribution?: string;
   }) => {
     const prefix = item.category === 'tops' ? 'TP' : item.category === 'bottoms' ? 'BT' : 'AC';
+    const suffix =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const newItem: WardrobeItem = {
-      code: `${prefix}-${Date.now().toString().slice(-4)}`,
+      code: `${prefix}-${suffix}`,
       type: item.type,
       category: item.category as WardrobeCategory,
       ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
@@ -300,24 +640,60 @@ export default function App() {
 
     setWardrobeItems((prev) => {
       const next = [...prev, newItem];
+      const sortOrder = next.length - 1;
+      const uidSync = wardrobeUserIdRef.current;
       if (SUPABASE_ON) {
+        if (uidSync) {
+          storage.setWardrobe(uidSync, next);
+        } else {
+          void createBrowserSupabaseClient()
+            .auth.getSession()
+            .then(({ data: { session } }) => {
+              const u = session?.user?.id;
+              if (u) storage.setWardrobe(u, next);
+            });
+        }
         void (async () => {
           try {
             const supabase = createBrowserSupabaseClient();
+            await supabase.auth.refreshSession();
             const {
-              data: { user },
-            } = await supabase.auth.getUser();
-            if (user) {
-              await insertWardrobeItem(supabase, user.id, newItem, next.length - 1);
+              data: { session },
+            } = await supabase.auth.getSession();
+            if (!session?.user) {
+              showToast('Sign in to save items to your wardrobe.', 'error');
+              setWardrobeItems((p) => p.filter((i) => i.code !== newItem.code));
+              if (wardrobeUserIdRef.current) {
+                storage.setWardrobe(
+                  wardrobeUserIdRef.current,
+                  next.filter((i) => i.code !== newItem.code)
+                );
+              }
+              return;
             }
+            const result = await insertWardrobeItem(
+              supabase,
+              session.user.id,
+              newItem,
+              sortOrder
+            );
+            if ('error' in result) {
+              console.warn('insertWardrobeItem (device copy kept)', result.error);
+              showToast(`${item.type} saved on this device. Cloud sync failed.`, 'error');
+              return;
+            }
+            showToast(`${item.type} added to wardrobe!`);
           } catch (e) {
-            console.error('Failed to persist wardrobe item', e);
+            console.warn('Cloud wardrobe sync failed (device copy kept)', e);
+            showToast(`${item.type} saved on this device. Cloud sync failed.`, 'error');
           }
         })();
       }
       return next;
     });
-    showToast(`${item.type} added to wardrobe!`);
+    if (!SUPABASE_ON) {
+      showToast(`${item.type} added to wardrobe!`);
+    }
   };
 
   const handleTryOn = async () => {
@@ -343,20 +719,41 @@ export default function App() {
         }),
       });
 
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error('Try-on request failed');
+        if (
+          response.status === 402 ||
+          payload?.code === 'REPLICATE_PAYMENT_REQUIRED'
+        ) {
+          throw new Error(
+            'Virtual try-on needs Replicate billing credit. Add funds at https://replicate.com/account/billing — wait a few minutes after purchase, then try again.',
+          );
+        }
+        const msg =
+          typeof payload?.details === 'string'
+            ? payload.details
+            : typeof payload?.error === 'string'
+              ? payload.error
+              : `Try-on failed (${response.status})`;
+        throw new Error(msg);
       }
-      const payload = await response.json();
-      const output = payload?.output;
-      const generated = Array.isArray(output) ? output[0] : output;
-      if (typeof generated === 'string' && generated.length > 0) {
-        setTryOnImageUrl(generated);
+      const imageUrl =
+        typeof payload?.imageUrl === 'string' && payload.imageUrl.startsWith('http')
+          ? payload.imageUrl
+          : null;
+      if (imageUrl) {
+        setTryOnImageUrl(imageUrl);
         showToast('Try-on generated');
       } else {
-        showToast('Try-on completed but no image was returned', 'error');
+        showToast('Try-on completed but no image URL was returned', 'error');
       }
-    } catch {
-      showToast('Try-on failed. Confirm REPLICATE_API_TOKEN is configured.', 'error');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Try-on failed';
+      const tokenHint =
+        /missing\s+replicate/i.test(msg) || /REPLICATE_API_TOKEN/i.test(msg)
+          ? ' Add REPLICATE_API_TOKEN to .env.local (no quotes/spaces) and restart the dev server.'
+          : '';
+      showToast(`${msg}${tokenHint}`, 'error');
     } finally {
       setIsGeneratingTryOn(false);
     }
@@ -423,13 +820,17 @@ export default function App() {
 
         <div className="flex items-center gap-3 sm:gap-6 min-w-0 flex-1 justify-end">
           {isLoggedIn && (
-            <nav className="hidden md:flex items-center gap-6 shrink-0">
+            <nav
+              className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0 min-w-0 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              aria-label="Main views"
+            >
               <button
                 type="button"
                 onClick={() => setCurrentView('wardrobe')}
-                className="hover:opacity-60 transition-opacity duration-200 ease-out rounded-sm"
+                aria-current={currentView === 'wardrobe' ? 'page' : undefined}
+                className="hover:opacity-60 transition-opacity duration-200 ease-out rounded-sm shrink-0"
                 style={{
-                  fontSize: '11px',
+                  fontSize: 'clamp(9px, 2.5vw, 11px)',
                   fontWeight: currentView === 'wardrobe' ? 800 : 600,
                   letterSpacing: '0.05em',
                   opacity: currentView === 'wardrobe' ? 1 : 0.6
@@ -440,9 +841,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setCurrentView('outfits')}
-                className="hover:opacity-60 transition-opacity duration-200 ease-out rounded-sm flex items-center gap-1"
+                aria-current={currentView === 'outfits' ? 'page' : undefined}
+                className="hover:opacity-60 transition-opacity duration-200 ease-out rounded-sm flex items-center gap-1 shrink-0"
                 style={{
-                  fontSize: '11px',
+                  fontSize: 'clamp(9px, 2.5vw, 11px)',
                   fontWeight: currentView === 'outfits' ? 800 : 600,
                   letterSpacing: '0.05em',
                   opacity: currentView === 'outfits' ? 1 : 0.6
@@ -474,20 +876,30 @@ export default function App() {
                   <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em' }}>ADD PHOTO</span>
                 </button>
               )}
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex items-center gap-1.5 sm:gap-2 pl-2 pr-2 sm:px-4 py-2 rounded-full hover:opacity-80 active:opacity-70 transition-all duration-200 ease-out min-w-0 max-w-full"
+              <div
+                className="flex items-center gap-1 sm:gap-2 pl-2 pr-1 sm:pr-2 py-1 rounded-full min-w-0 max-w-full relative z-[60] pointer-events-auto"
                 style={{
                   background: '#FFE5F1',
-                  border: '2px solid #000'
+                  border: '2px solid #000',
                 }}
                 title={`Signed in as ${userName}`}
               >
-                <User className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
-                <span className="truncate max-w-[4.5rem] sm:max-w-[10rem] md:max-w-[14rem]" style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em' }}>{userName.toUpperCase()}</span>
-                <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} />
-              </button>
+                <User className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} aria-hidden />
+                <span
+                  className="truncate max-w-[4.5rem] sm:max-w-[10rem] md:max-w-[14rem]"
+                  style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em' }}
+                >
+                  {userName.toUpperCase()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  className="flex items-center justify-center min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 rounded-full hover:bg-black/8 active:bg-black/12 transition-colors shrink-0 -mr-0.5"
+                  aria-label={`Log out ${userName}`}
+                >
+                  <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} aria-hidden />
+                </button>
+              </div>
             </div>
           ) : (
             <button
@@ -586,6 +998,7 @@ export default function App() {
 
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <motion.button
+                type="button"
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7, duration: 0.8 }}
@@ -597,6 +1010,14 @@ export default function App() {
                   fontWeight: 700,
                   letterSpacing: '0.1em',
                   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+                }}
+                onClick={() => {
+                  if (!isLoggedIn) {
+                    handleLogin();
+                    return;
+                  }
+                  setCurrentView('wardrobe');
+                  document.getElementById('wardrobe-panel')?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
                 <span>{isLoggedIn ? 'VIEW MY WARDROBE' : 'GET STARTED'}</span>
@@ -843,6 +1264,7 @@ export default function App() {
           {/* Wardrobe Builder */}
           {currentView === 'wardrobe' && (
             <motion.div
+              id="wardrobe-panel"
               initial={false}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -1214,7 +1636,11 @@ export default function App() {
                       whileHover={{ scale: 1.02, y: -1 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={handleSaveOutfit}
-                      disabled={!selectedOutfit.tops && !selectedOutfit.bottoms}
+                      disabled={
+                        !selectedOutfit.tops &&
+                        !selectedOutfit.bottoms &&
+                        !selectedOutfit.accessories
+                      }
                       className="w-full py-3 px-4 rounded-full text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       style={{
                         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -1263,17 +1689,42 @@ export default function App() {
                 border: '3px solid #000',
                 boxShadow: '12px 12px 0 #000'
               }}>
-                <div className="mb-8">
-                  <h2 className="mb-2" style={{
-                    fontSize: 'clamp(32px, 5vw, 48px)',
-                    fontWeight: 900,
-                    letterSpacing: '-0.02em'
-                  }}>
-                    SAVED OUTFITS
-                  </h2>
-                  <p style={{ fontSize: '15px', fontWeight: 500, opacity: 0.7 }}>
-                    {savedOutfits.length} saved {savedOutfits.length === 1 ? 'outfit' : 'outfits'}
-                  </p>
+                <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="mb-2" style={{
+                      fontSize: 'clamp(32px, 5vw, 48px)',
+                      fontWeight: 900,
+                      letterSpacing: '-0.02em'
+                    }}>
+                      SAVED OUTFITS
+                    </h2>
+                    <p style={{ fontSize: '15px', fontWeight: 500, opacity: 0.7 }}>
+                      {savedOutfits.length} saved {savedOutfits.length === 1 ? 'outfit' : 'outfits'}
+                      {SUPABASE_ON && (
+                        <span className="block sm:inline sm:before:content-['\00a0\2014\00a0'] sm:before:font-normal mt-1 sm:mt-0 text-[13px]">
+                          Synced to your account
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  {SUPABASE_ON && isLoggedIn && (
+                    <button
+                      type="button"
+                      onClick={() => void refreshSavedOutfits()}
+                      disabled={savedOutfitsLoading}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 border-black bg-white hover:opacity-85 active:opacity-70 disabled:opacity-50 transition-opacity shrink-0 self-start"
+                      style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em' }}
+                      aria-busy={savedOutfitsLoading}
+                      aria-label="Refresh saved outfits from server"
+                    >
+                      {savedOutfitsLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2.5} aria-hidden />
+                      ) : (
+                        <RefreshCw className="w-3.5 h-3.5" strokeWidth={2.5} aria-hidden />
+                      )}
+                      REFRESH
+                    </button>
+                  )}
                 </div>
 
                 {savedOutfits.length === 0 ? (
@@ -1353,30 +1804,53 @@ export default function App() {
 
                         <div className="space-y-2 min-w-0">
                           {outfit.tops && (
-                            <div className="text-xs font-semibold break-words">Top: {outfit.tops.code}</div>
+                            <div className="text-xs font-semibold break-words">
+                              Top: {wardrobeItemLabel(outfit.tops)}
+                            </div>
                           )}
                           {outfit.bottoms && (
-                            <div className="text-xs font-semibold break-words">Bottom: {outfit.bottoms.code}</div>
+                            <div className="text-xs font-semibold break-words">
+                              Bottom: {wardrobeItemLabel(outfit.bottoms)}
+                            </div>
                           )}
                           {outfit.accessories && (
-                            <div className="text-xs font-semibold break-words">Accessory: {outfit.accessories.code}</div>
+                            <div className="text-xs font-semibold break-words">
+                              Accessory: {wardrobeItemLabel(outfit.accessories)}
+                            </div>
                           )}
                         </div>
 
-                        <div className="mt-4 pt-4 border-t-2 border-black/10 flex flex-wrap items-center justify-between gap-2">
+                        <div className="mt-4 pt-4 border-t-2 border-black/10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                           <span className="break-words" style={{ fontSize: '10px', opacity: 0.6, fontWeight: 600 }}>
-                            {new Date(outfit.savedAt).toLocaleDateString()}
+                            Saved {new Date(outfit.savedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
                           </span>
-                          <button
-                            onClick={() => {
-                              setSavedOutfits(prev => prev.filter(o => o.id !== outfit.id));
-                              showToast('Outfit removed');
-                            }}
-                            className="text-xs font-bold hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm px-1 -mx-1"
-                            type="button"
-                          >
-                            DELETE
-                          </button>
+                          <div className="flex flex-wrap gap-2 justify-end sm:justify-end">
+                            <motion.button
+                              type="button"
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              onClick={() => handleApplySavedOutfit(outfit)}
+                              className="px-4 py-2 rounded-full text-white"
+                              style={{
+                                background: '#000',
+                                fontSize: '10px',
+                                fontWeight: 800,
+                                letterSpacing: '0.08em',
+                              }}
+                              aria-label={`Apply saved outfit to wardrobe builder: ${wardrobeItemLabel(outfit.tops) || 'outfit'}`}
+                            >
+                              USE IN BUILDER
+                            </motion.button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteSavedOutfit(outfit)}
+                              disabled={deletingOutfitId === outfit.id}
+                              className="px-3 py-2 rounded-full border-2 border-black/30 text-xs font-bold hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out disabled:opacity-40"
+                              aria-label={`Delete saved outfit: ${wardrobeItemLabel(outfit.tops) || 'outfit'}`}
+                            >
+                              {deletingOutfitId === outfit.id ? '…' : 'DELETE'}
+                            </button>
+                          </div>
                         </div>
                       </motion.div>
                     ))}
@@ -1714,6 +2188,14 @@ export default function App() {
             <Plus className="w-6 h-6" strokeWidth={2.5} />
           </motion.button>
         </>
+      )}
+
+      {SUPABASE_ON && (
+        <AuthDialog
+          open={showAuthDialog}
+          onOpenChange={setShowAuthDialog}
+          onSignedIn={handleAuthDialogSignedIn}
+        />
       )}
 
       {/* Onboarding Flow */}

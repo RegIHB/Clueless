@@ -1,5 +1,5 @@
 -- Run in Supabase SQL Editor or via CLI: supabase db push
--- Requires: Auth → Providers → Anonymous sign-ins enabled (for seamless app login)
+-- App uses email/password auth; optional: enable Anonymous for guest sessions.
 -- If CREATE TRIGGER fails on "procedure", replace `execute procedure` with `execute function` (Postgres 14+).
 
 create table if not exists public.profiles (
