@@ -80,6 +80,7 @@ export default function App() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(!SUPABASE_ON);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup'>('signin');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<WardrobeCategory>('tops');
@@ -360,14 +361,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when tab opens
   }, [currentView, SUPABASE_ON, isLoggedIn]);
 
-  const handleLogin = () => {
+  const openAuth = useCallback((mode: 'signin' | 'signup') => {
     if (!SUPABASE_ON) {
       setIsLoggedIn(true);
       setSavedOutfits(loadLocalSavedOutfits());
       return;
     }
+    setAuthInitialMode(mode);
     setShowAuthDialog(true);
-  };
+  }, []);
+
+  const handleLogin = () => openAuth('signin');
+  const handleSignUpCTA = () => openAuth('signup');
 
   const handleLogout = async () => {
     setSelectedOutfit({});
@@ -905,23 +910,29 @@ export default function App() {
             <button
               type="button"
               onClick={handleLogin}
-              className="px-5 py-2.5 text-white hover:opacity-90 active:opacity-80 transition-all duration-200 ease-out rounded-full shrink-0"
+              className="px-6 py-2.5 sm:px-7 sm:py-3 text-white hover:opacity-90 active:opacity-80 transition-all duration-200 ease-out rounded-full shrink-0"
               style={{
-                fontSize: '10px',
+                fontSize: '11px',
                 fontWeight: 700,
-                letterSpacing: '0.1em',
+                letterSpacing: '0.12em',
                 background: '#000000',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+                boxShadow: '0 6px 20px rgba(0, 0, 0, 0.18)'
               }}
             >
-              LOGIN
+              SIGN IN
             </button>
           )}
         </div>
       </motion.header>
 
       {/* Hero */}
-      <section className="relative min-h-screen flex items-center pt-24 pb-16 px-6 md:px-12 lg:px-20">
+      <section
+        className={`relative flex items-center px-6 md:px-12 lg:px-20 ${
+          isLoggedIn
+            ? 'min-h-screen pt-24 pb-16'
+            : 'min-h-[min(100dvh,920px)] pt-28 pb-20 md:pt-32 md:pb-28'
+        }`}
+      >
         <div className="max-w-[1400px] mx-auto w-full">
           {/* Weather & Location Widget */}
           {isLoggedIn && (
@@ -950,7 +961,7 @@ export default function App() {
             </motion.div>
           )}
 
-          <div className="text-center mb-12">
+          <div className={`text-center ${isLoggedIn ? 'mb-12' : 'mb-14 md:mb-16'}`}>
             {isLoggedIn && (
               <motion.div
                 initial={false}
@@ -968,13 +979,25 @@ export default function App() {
               </motion.div>
             )}
 
+            {!isLoggedIn && (
+              <motion.p
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.6 }}
+                className="mb-5 md:mb-6 tracking-[0.22em] uppercase mx-auto max-w-xl"
+                style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(0,0,0,0.55)' }}
+              >
+                Digital wardrobe · AI stylist
+              </motion.p>
+            )}
+
             <motion.h1
               initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.8 }}
-              className="mb-6"
+              className={isLoggedIn ? 'mb-6' : 'mb-6 md:mb-8'}
               style={{
-                fontSize: 'clamp(48px, 10vw, 96px)',
+                fontSize: isLoggedIn ? 'clamp(48px, 10vw, 96px)' : 'clamp(40px, 9vw, 88px)',
                 fontWeight: 900,
                 lineHeight: 0.95,
                 letterSpacing: '-0.03em',
@@ -990,39 +1013,78 @@ export default function App() {
               initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5, duration: 0.8 }}
-              className="mb-8 max-w-[600px] mx-auto"
-              style={{ fontSize: '16px', lineHeight: 1.6, fontWeight: 500 }}
+              className={`mx-auto text-pretty ${isLoggedIn ? 'mb-8 max-w-[600px]' : 'mb-10 md:mb-12 max-w-[34rem] px-1'}`}
+              style={{
+                fontSize: isLoggedIn ? '16px' : 'clamp(15px, 2.5vw, 18px)',
+                lineHeight: isLoggedIn ? 1.6 : 1.65,
+                fontWeight: 500,
+                color: isLoggedIn ? undefined : 'rgba(0,0,0,0.78)',
+              }}
             >
-              Your wardrobe, reimagined. AI-powered outfit suggestions from what you already own.
+              {isLoggedIn ? (
+                <>Your wardrobe, reimagined. AI-powered outfit suggestions from what you already own.</>
+              ) : (
+                <>
+                  Stop staring at the closet. Clueless remembers what you own, respects the weather, and helps you
+                  build outfits in seconds—then chats with you like a stylist who actually knows your rail.
+                </>
+              )}
             </motion.p>
 
-            <div className="flex items-center justify-center gap-4 flex-wrap">
+            <div className={`flex items-center justify-center flex-wrap ${isLoggedIn ? 'gap-4' : 'gap-3 sm:gap-4'}`}>
               <motion.button
                 type="button"
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7, duration: 0.8 }}
                 whileHover={{ scale: 1.05, y: -2 }}
-                className="px-10 py-4 text-white transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
+                className={`text-white transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3 ${
+                  isLoggedIn ? 'px-10 py-4' : 'px-10 py-4 sm:px-12 sm:py-4'
+                }`}
                 style={{
                   background: '#000000',
                   fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.1em',
-                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)'
+                  boxShadow: '0 10px 28px rgba(0, 0, 0, 0.22)'
                 }}
                 onClick={() => {
                   if (!isLoggedIn) {
-                    handleLogin();
+                    handleSignUpCTA();
                     return;
                   }
                   setCurrentView('wardrobe');
                   document.getElementById('wardrobe-panel')?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
-                <span>{isLoggedIn ? 'VIEW MY WARDROBE' : 'GET STARTED'}</span>
+                <span>{isLoggedIn ? 'VIEW MY WARDROBE' : 'START FREE'}</span>
                 <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
               </motion.button>
+
+              {!isLoggedIn && (
+                <motion.button
+                  type="button"
+                  initial={false}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.75, duration: 0.8 }}
+                  whileHover={{ scale: 1.03, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() =>
+                    document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })
+                  }
+                  className="px-8 py-4 sm:px-10 rounded-full inline-flex items-center gap-2 transition-opacity hover:opacity-85"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.75)',
+                    border: '2px solid #000',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    letterSpacing: '0.1em',
+                    boxShadow: '4px 4px 0 #000',
+                  }}
+                >
+                  HOW IT WORKS
+                </motion.button>
+              )}
 
               {isLoggedIn && (
                 <motion.button
@@ -1048,95 +1110,166 @@ export default function App() {
             </div>
           </div>
 
-          {/* Cards Grid */}
+          {/* Cards Grid — guests get three clear value props; signed-in keeps a lighter pair */}
           <motion.div
             initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.9, duration: 0.8 }}
-            className="grid md:grid-cols-2 gap-6 max-w-[900px] mx-auto"
+            className={`grid mx-auto ${
+              isLoggedIn
+                ? 'md:grid-cols-2 gap-6 max-w-[900px]'
+                : 'md:grid-cols-3 gap-5 md:gap-6 max-w-[1100px]'
+            }`}
           >
-            <motion.div
-              whileHover={{ y: -4 }}
-              className="p-8 rounded-3xl relative overflow-hidden"
-              style={{
-                background: '#FFE5C8',
-                border: '3px solid #000',
-                boxShadow: '8px 8px 0 #000'
-              }}
-            >
-              <div className="relative z-10">
-                <h3 className="mb-3" style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.01em' }}>
-                  Clueless
-                </h3>
-                <p style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
-                  Your personal AI wardrobe assistant
-                </p>
-              </div>
-            </motion.div>
+            {!isLoggedIn ? (
+              <>
+                {[
+                  {
+                    kicker: '01',
+                    title: 'Own less chaos',
+                    body: 'Add pieces from search or upload. One closet, always sorted by category—no more “where did I put that?”',
+                  },
+                  {
+                    kicker: '02',
+                    title: 'Dress for the day',
+                    body: 'When you’re signed in, we fold in your location and forecast so suggestions feel sensible, not random.',
+                  },
+                  {
+                    kicker: '03',
+                    title: 'Chat with your rail',
+                    body: 'The stylist reasons over what you actually own—mix, match, and save outfits without leaving the app.',
+                  },
+                ].map((card, idx) => (
+                  <motion.div
+                    key={card.kicker}
+                    whileHover={{ y: -4 }}
+                    className="p-7 md:p-8 rounded-3xl text-left"
+                    style={{
+                      background: idx === 1 ? 'rgba(255, 255, 255, 0.82)' : '#FFE5C8',
+                      border: '3px solid #000',
+                      boxShadow: '8px 8px 0 #000',
+                    }}
+                  >
+                    <span
+                      className="inline-block mb-4 px-2.5 py-1 rounded-md"
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 800,
+                        letterSpacing: '0.12em',
+                        background: '#000',
+                        color: '#fff',
+                      }}
+                    >
+                      {card.kicker}
+                    </span>
+                    <h3 className="mb-3" style={{ fontSize: 'clamp(18px, 2.2vw, 22px)', fontWeight: 900, letterSpacing: '-0.02em' }}>
+                      {card.title}
+                    </h3>
+                    <p style={{ fontSize: '14px', lineHeight: 1.65, fontWeight: 500, color: 'rgba(0,0,0,0.78)' }}>
+                      {card.body}
+                    </p>
+                  </motion.div>
+                ))}
+              </>
+            ) : (
+              <>
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  className="p-8 rounded-3xl relative overflow-hidden"
+                  style={{
+                    background: '#FFE5C8',
+                    border: '3px solid #000',
+                    boxShadow: '8px 8px 0 #000'
+                  }}
+                >
+                  <div className="relative z-10">
+                    <h3 className="mb-3" style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.01em' }}>
+                      Clueless
+                    </h3>
+                    <p style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
+                      Your personal AI wardrobe assistant
+                    </p>
+                  </div>
+                </motion.div>
 
-            <motion.div
-              whileHover={{ y: -4 }}
-              className="p-8 rounded-3xl relative overflow-hidden"
-              style={{
-                background: '#FFE5C8',
-                border: '3px solid #000',
-                boxShadow: '8px 8px 0 #000'
-              }}
-            >
-              <div className="relative z-10">
-                <h3 className="mb-3" style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.01em' }}>
-                  Clueless
-                </h3>
-                <p style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
-                  Try the closet scanner beta
-                </p>
-              </div>
-            </motion.div>
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  className="p-8 rounded-3xl relative overflow-hidden"
+                  style={{
+                    background: '#FFE5C8',
+                    border: '3px solid #000',
+                    boxShadow: '8px 8px 0 #000'
+                  }}
+                >
+                  <div className="relative z-10">
+                    <h3 className="mb-3" style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.01em' }}>
+                      Clueless
+                    </h3>
+                    <p style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
+                      Try the closet scanner beta
+                    </p>
+                  </div>
+                </motion.div>
+              </>
+            )}
           </motion.div>
         </div>
       </section>
 
       {/* AI Recommendations Section */}
-      <section className="px-6 md:px-12 lg:px-20 py-24">
+      <section
+        id="how-it-works"
+        className={`px-6 md:px-12 lg:px-20 scroll-mt-28 ${isLoggedIn ? 'py-24' : 'py-20 md:py-28'}`}
+      >
         <div className="max-w-[1400px] mx-auto">
           <motion.div
             initial={false}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="text-center mb-12"
+            className={`text-center ${isLoggedIn ? 'mb-12' : 'mb-14 md:mb-16'}`}
           >
-            <h2 className="mb-4" style={{
+            <h2 className={`${isLoggedIn ? 'mb-4' : 'mb-5 md:mb-6'}`} style={{
               fontSize: 'clamp(32px, 6vw, 56px)',
               fontWeight: 900,
-              lineHeight: 1.1,
+              lineHeight: 1.08,
               letterSpacing: '-0.02em',
               textTransform: 'uppercase'
             }}>
-              AI-POWERED OUTFIT RECOMMENDATIONS
+              {isLoggedIn ? 'AI-POWERED OUTFIT RECOMMENDATIONS' : 'OUTFITS THAT FIT YOUR REAL LIFE'}
             </h2>
-            <p className="max-w-[700px] mx-auto mb-8" style={{ fontSize: '15px', lineHeight: 1.7, fontWeight: 500 }}>
-              Just tell us what you&apos;re doing today. Our AI considers your location, weather, personal style, and occasion to suggest the perfect outfit.
+            <p className={`max-w-[640px] mx-auto text-pretty ${isLoggedIn ? 'mb-8' : 'mb-2'}`} style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'rgba(0,0,0,0.78)' }}>
+              {isLoggedIn ? (
+                <>Just tell us what you&apos;re doing today. Our AI considers your location, weather, personal style, and occasion to suggest the perfect outfit.</>
+              ) : (
+                <>Sign in and the app learns your closet, the weather where you are, and how you like to dress—so recommendations feel specific, not generic.</>
+              )}
             </p>
           </motion.div>
 
           {/* AI Feature Cards */}
-          <div className="grid md:grid-cols-3 gap-6 mb-16">
+          <div className={`grid md:grid-cols-3 ${isLoggedIn ? 'gap-6 mb-16' : 'gap-5 md:gap-7 mb-12 md:mb-16'}`}>
             {[
               {
                 icon: <MapPin className="w-6 h-6" strokeWidth={2.5} />,
-                title: 'LOCATION AWARE',
-                description: 'Weather-appropriate suggestions based on your current location and forecast'
+                title: isLoggedIn ? 'LOCATION AWARE' : 'WHERE YOU ARE',
+                description: isLoggedIn
+                  ? 'Weather-appropriate suggestions based on your current location and forecast'
+                  : 'After sign-in, forecasts and plans stay in sync so you’re not caught in the wrong layer.',
               },
               {
                 icon: <Sparkles className="w-6 h-6" strokeWidth={2.5} />,
-                title: 'SMART STYLING',
-                description: "AI learns your style from saved outfits and suggests looks you&apos;ll love"
+                title: isLoggedIn ? 'SMART STYLING' : 'YOUR PIECES, FIRST',
+                description: isLoggedIn
+                  ? "AI learns your style from saved outfits and suggests looks you'll love"
+                  : 'Suggestions pull from what you’ve added—no fantasy closet full of things you don’t own.',
               },
               {
                 icon: <MessageCircle className="w-6 h-6" strokeWidth={2.5} />,
-                title: 'CONVERSATIONAL',
-                description: 'Chat naturally about your day and get instant outfit recommendations'
+                title: isLoggedIn ? 'CONVERSATIONAL' : 'NATURAL CHAT',
+                description: isLoggedIn
+                  ? 'Chat naturally about your day and get instant outfit recommendations'
+                  : 'Describe your day in plain language; the stylist answers with combinations you can actually wear.',
               }
             ].map((feature, idx) => (
               <motion.div
@@ -1169,7 +1302,8 @@ export default function App() {
             ))}
           </div>
 
-          {/* Example Prompts */}
+          {/* Example prompts + CTA — logged-in only */}
+          {isLoggedIn && (
           <motion.div
             initial={false}
             whileInView={{ opacity: 1, y: 0 }}
@@ -1234,30 +1368,35 @@ export default function App() {
               <span>TALK TO AI STYLIST</span>
             </motion.button>
           </motion.div>
+          )}
         </div>
       </section>
 
       {/* Value Proposition */}
-      <section className="px-6 md:px-12 lg:px-20 py-24">
+      <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-24' : 'py-20 md:py-28'}`}>
         <div className="max-w-[1400px] mx-auto">
           <motion.div
             initial={false}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="text-center mb-16"
+            className={`text-center ${isLoggedIn ? 'mb-16' : 'mb-12 md:mb-16'}`}
           >
-            <h2 className="mb-4" style={{
+            <h2 className={`${isLoggedIn ? 'mb-4' : 'mb-5'}`} style={{
               fontSize: 'clamp(32px, 6vw, 56px)',
               fontWeight: 900,
-              lineHeight: 1.1,
+              lineHeight: 1.08,
               letterSpacing: '-0.02em',
               textTransform: 'uppercase'
             }}>
               BUILD YOUR DIGITAL WARDROBE
             </h2>
-            <p className="max-w-[700px] mx-auto" style={{ fontSize: '15px', lineHeight: 1.7, fontWeight: 500 }}>
-              Catalog your entire wardrobe. Mix and match pieces to create unlimited outfit combinations.
+            <p className="max-w-[640px] mx-auto text-pretty" style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'rgba(0,0,0,0.78)' }}>
+              {isLoggedIn ? (
+                <>Catalog your entire wardrobe. Mix and match pieces to create unlimited outfit combinations.</>
+              ) : (
+                <>One place for everything you wear. See it, combine it, save looks you love—then come back when you’re rushing out the door.</>
+              )}
             </p>
           </motion.div>
 
@@ -1271,7 +1410,9 @@ export default function App() {
               transition={{ duration: 0.8, delay: 0.2 }}
               className="mb-16"
             >
-              <div className="grid lg:grid-cols-[1fr,minmax(280px,400px)] gap-8 min-w-0">
+              <div
+                className={`grid gap-8 min-w-0 ${isLoggedIn ? 'lg:grid-cols-[1fr,minmax(280px,400px)]' : 'grid-cols-1'}`}
+              >
                 {/* Wardrobe Grid Section */}
                 <div className="p-8 md:p-12 rounded-3xl min-w-0"
                   style={{
@@ -1281,7 +1422,36 @@ export default function App() {
                   }}
                 >
                   {wardrobeItems.length === 0 ? (
-                    <EmptyState onAddItem={() => setShowUpload(true)} />
+                    isLoggedIn ? (
+                      <EmptyState onAddItem={() => setShowUpload(true)} />
+                    ) : (
+                      <div className="text-center py-14 md:py-20 px-6 sm:px-10 max-w-lg mx-auto">
+                        <p className="mb-2 tracking-[0.14em] uppercase" style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(0,0,0,0.45)' }}>
+                          Members only
+                        </p>
+                        <h3 className="mb-4" style={{ fontSize: 'clamp(22px, 4vw, 28px)', fontWeight: 900, letterSpacing: '-0.02em' }}>
+                          Unlock your closet
+                        </h3>
+                        <p className="mb-8" style={{ fontSize: '15px', lineHeight: 1.65, fontWeight: 500, color: 'rgba(0,0,0,0.72)' }}>
+                          Create a free account to add pieces, run try-ons, save outfits, and chat with the stylist using your real wardrobe.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleSignUpCTA}
+                          className="px-10 py-3.5 rounded-full text-white transition-opacity hover:opacity-90"
+                          style={{
+                            background: '#000',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            letterSpacing: '0.12em',
+                            border: '2px solid #000',
+                            boxShadow: '6px 6px 0 #000',
+                          }}
+                        >
+                          CREATE FREE ACCOUNT
+                        </button>
+                      </div>
+                    )
                   ) : (
                     <>
                       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
@@ -1441,7 +1611,8 @@ export default function App() {
                   )}
                 </div>
 
-              {/* Model Preview - Always Visible */}
+              {/* Model preview / try-on — logged-in only */}
+              {isLoggedIn && (
               <div className="lg:sticky lg:top-24 lg:self-start min-w-0 w-full">
                 <motion.div
                   initial={false}
@@ -1672,6 +1843,7 @@ export default function App() {
                   </div>
                 </motion.div>
               </div>
+              )}
             </div>
           </motion.div>
           )}
@@ -1909,7 +2081,7 @@ export default function App() {
       </section>
 
       {/* Social Proof / Demo Section */}
-      <section className="px-6 md:px-12 lg:px-20 py-24">
+      <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-24' : 'py-20 md:py-28'}`}>
         <div className="max-w-[1400px] mx-auto">
           <div className="grid md:grid-cols-2 gap-8">
             {/* Left Column */}
@@ -1962,10 +2134,10 @@ export default function App() {
                 boxShadow: '8px 8px 0 #000'
               }}>
                 <h3 className="mb-4" style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.01em' }}>
-                  DEAD READY
+                  OUT THE DOOR FASTER
                 </h3>
-                <p style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
-                  Quick outfit picks for every occasion. Morning routine solved.
+                <p style={{ fontSize: '14px', lineHeight: 1.65, fontWeight: 500 }}>
+                  Fewer tabs, fewer maybes. Lock in a look, save it, and move on with your morning.
                 </p>
               </div>
 
@@ -1975,13 +2147,22 @@ export default function App() {
                 boxShadow: '8px 8px 0 #000'
               }}>
                 <h3 className="mb-4" style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.01em' }}>
-                  DEMO
+                  YOUR CLOSET, ORGANIZED
                 </h3>
                 <p className="mb-4" style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
-                  Watch how Clueless transforms your wardrobe management experience.
+                  Add what you own, preview outfits on your photo, save looks you love, and chat with the stylist using your real wardrobe—no more guessing in the morning.
                 </p>
                 <motion.button
+                  type="button"
                   whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    if (isLoggedIn) {
+                      document.getElementById('wardrobe-panel')?.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                      handleSignUpCTA();
+                    }
+                  }}
                   className="w-full py-3 px-6 rounded-full text-white"
                   style={{
                     background: '#000',
@@ -1990,7 +2171,7 @@ export default function App() {
                     letterSpacing: '0.1em'
                   }}
                 >
-                  WATCH DEMO
+                  {isLoggedIn ? 'OPEN WARDROBE' : 'GET STARTED'}
                 </motion.button>
               </div>
             </motion.div>
@@ -2071,13 +2252,13 @@ export default function App() {
       )}
 
       {/* Testimonial */}
-      <section className="px-6 md:px-12 lg:px-20 py-24">
+      <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-24' : 'py-20 md:py-28'}`}>
         <motion.div
           initial={false}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8 }}
-          className="max-w-[1000px] mx-auto text-center p-12 md:p-16 rounded-3xl"
+          className={`max-w-[1000px] mx-auto text-center rounded-3xl ${isLoggedIn ? 'p-12 md:p-16' : 'p-10 md:p-14'}`}
           style={{
             background: '#000',
             color: '#fff',
@@ -2085,29 +2266,41 @@ export default function App() {
             boxShadow: '12px 12px 0 rgba(0, 0, 0, 0.3)'
           }}
         >
-          <h2 className="mb-6 break-words hyphens-auto px-1" style={{
-            fontSize: 'clamp(36px, 6vw, 64px)',
+          <h2 className="mb-6 break-words hyphens-auto px-1 text-balance" style={{
+            fontSize: isLoggedIn ? 'clamp(36px, 6vw, 64px)' : 'clamp(28px, 5vw, 48px)',
             fontWeight: 900,
-            lineHeight: 1.1,
+            lineHeight: 1.12,
             letterSpacing: '-0.02em',
             textTransform: 'uppercase'
           }}>
-            CLUELESS TRANSFORMED MY WARDROBE MANAGEMENT EXPERIENCE.
-            <br />
-            THE AI SUGGESTIONS ARE SPOT ON!
+            {isLoggedIn ? (
+              <>
+                CLUELESS TRANSFORMED MY WARDROBE MANAGEMENT EXPERIENCE.
+                <br />
+                THE AI SUGGESTIONS ARE SPOT ON!
+              </>
+            ) : (
+              <>
+                FINALLY AN APP THAT REMEMBERS WHAT I OWN.
+                <br />
+                <span className="text-white/85" style={{ fontSize: '0.72em', fontWeight: 800 }}>
+                  The chat actually uses my closet—not a random moodboard.
+                </span>
+              </>
+            )}
           </h2>
           <div className="flex items-center justify-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-300 to-pink-500 border-2 border-white" />
-            <div className="text-left">
-              <div style={{ fontSize: '14px', fontWeight: 700 }}>Jordan Martinez</div>
-              <div style={{ fontSize: '12px', fontWeight: 500, opacity: 0.7 }}>Fashion Enthusiast</div>
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-300 to-pink-500 border-2 border-white shrink-0" />
+            <div className="text-left min-w-0">
+              <div style={{ fontSize: '14px', fontWeight: 700 }}>Jordan M.</div>
+              <div style={{ fontSize: '12px', fontWeight: 500, opacity: 0.7 }}>Early user, product design</div>
             </div>
           </div>
         </motion.div>
       </section>
 
       {/* Final CTA */}
-      <section className="px-6 md:px-12 lg:px-20 py-32">
+      <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-32' : 'py-24 md:py-36'}`}>
         <motion.div
           initial={false}
           whileInView={{ opacity: 1, y: 0 }}
@@ -2115,7 +2308,7 @@ export default function App() {
           transition={{ duration: 0.8 }}
           className="max-w-[900px] mx-auto text-center"
         >
-          <h2 className="mb-8" style={{
+          <h2 className={`text-balance ${isLoggedIn ? 'mb-8' : 'mb-6 md:mb-8'}`} style={{
             fontSize: 'clamp(48px, 8vw, 96px)',
             fontWeight: 900,
             lineHeight: 0.95,
@@ -2126,12 +2319,27 @@ export default function App() {
             <br />
             CLUELESS AGAIN
           </h2>
-          <p className="mb-12 max-w-[600px] mx-auto" style={{ fontSize: '16px', lineHeight: 1.7, fontWeight: 500 }}>
-            Join thousands making the most of what they already own. Start building your digital wardrobe today.
+          <p className={`max-w-[32rem] mx-auto text-pretty ${isLoggedIn ? 'mb-12' : 'mb-6 md:mb-8'}`} style={{ fontSize: '16px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'rgba(0,0,0,0.76)' }}>
+            {isLoggedIn ? (
+              <>Join thousands making the most of what they already own. Start building your digital wardrobe today.</>
+            ) : (
+              <>Wear what you already own—with a stylist in your pocket. Free to start; your closet stays private to your account.</>
+            )}
           </p>
+          {!isLoggedIn && (
+            <p className="max-w-[36rem] mx-auto text-pretty mb-10 md:mb-12 px-2" style={{ fontSize: '12px', lineHeight: 1.6, fontWeight: 600, color: 'rgba(0,0,0,0.5)' }}>
+              Accounts and core wardrobe features are free. Optional AI try-on uses paid cloud GPU when you run it—see your provider’s billing (e.g. Replicate).
+            </p>
+          )}
           <motion.button
+            type="button"
             whileHover={{ scale: 1.05, y: -4 }}
             whileTap={{ scale: 0.98 }}
+            onClick={() =>
+              isLoggedIn
+                ? document.getElementById('wardrobe-panel')?.scrollIntoView({ behavior: 'smooth' })
+                : handleSignUpCTA()
+            }
             className="px-12 py-5 text-white transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
             style={{
               background: '#000',
@@ -2141,7 +2349,7 @@ export default function App() {
               boxShadow: '0 12px 32px rgba(0, 0, 0, 0.3)'
             }}
           >
-            <span>START NOW</span>
+            <span>{isLoggedIn ? 'MY WARDROBE' : 'CREATE FREE ACCOUNT'}</span>
             <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
           </motion.button>
         </motion.div>
@@ -2194,6 +2402,7 @@ export default function App() {
         <AuthDialog
           open={showAuthDialog}
           onOpenChange={setShowAuthDialog}
+          initialMode={authInitialMode}
           onSignedIn={handleAuthDialogSignedIn}
         />
       )}

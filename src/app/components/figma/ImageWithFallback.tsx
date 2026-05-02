@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element --
+   Intentional <img> for arbitrary external URLs and onError fallback; Next/Image requires known domains/loader. */
 import React, { useState } from 'react'
 
 const ERROR_IMG_SRC =
