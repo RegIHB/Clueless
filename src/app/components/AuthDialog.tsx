@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,12 +19,20 @@ type Mode = 'signin' | 'signup';
 type AuthDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** When the dialog opens, start on this tab (matches “Sign in” vs “Create account” CTAs). */
+  initialMode?: Mode;
   /** Run after email sign-in / sign-up returns a session so UI updates without a full reload. */
   onSignedIn?: () => void | Promise<void>;
 };
 
-export function AuthDialog({ open, onOpenChange, onSignedIn }: AuthDialogProps) {
-  const [mode, setMode] = useState<Mode>('signin');
+export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSignedIn }: AuthDialogProps) {
+  const [mode, setMode] = useState<Mode>(initialMode);
+
+  useEffect(() => {
+    if (open) {
+      setMode(initialMode);
+    }
+  }, [open, initialMode]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
