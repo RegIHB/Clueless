@@ -172,7 +172,10 @@ export async function bulkInsertWardrobeItems(
     attribution: item.attribution ?? null,
     sort_order: startSortOrder + index,
   }));
-  const { error } = await supabase.from('wardrobe_items').insert(rows);
+  const { error } = await supabase.from('wardrobe_items').upsert(rows, {
+    onConflict: 'user_id,code',
+    ignoreDuplicates: true,
+  });
   if (error) {
     console.error('bulkInsertWardrobeItems', error);
     return { error: error.message || 'Insert failed' };

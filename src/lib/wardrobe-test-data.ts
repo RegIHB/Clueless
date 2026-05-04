@@ -1,6 +1,6 @@
 /**
- * Demo wardrobe inventory: realistic garment titles with stock photos (Unsplash).
- * Safe to replace or clear in production when persisting real user data.
+ * Demo wardrobe inventory: product-style photos (flat lays / isolated garments on neutral backgrounds).
+ * Unsplash URLs use stable photo ids; replace anytime with your own catalog assets.
  */
 
 import type { WardrobeItem } from '@/types/wardrobe';
@@ -30,7 +30,7 @@ export function wardrobeSeedToItem(s: WardrobeSeedItem): WardrobeItem {
 const u = (id: string) =>
   `https://images.unsplash.com/${id}?auto=format&fit=crop&w=800&q=80`;
 
-/** Curated Unsplash paths (photo id + optional ixlib/sig for stable crops). */
+/** Curated Unsplash paths — apparel laid flat or isolated (no hangers, no on-body shots). */
 export const WARDROBE_TEST_ITEMS: WardrobeSeedItem[] = [
   // Tops
   {
@@ -38,80 +38,80 @@ export const WARDROBE_TEST_ITEMS: WardrobeSeedItem[] = [
     type: 'Top',
     category: 'tops',
     title: 'Organic cotton crewneck tee — off-white',
-    imageUrl: u('photo-1576566588028-4147f3842f27'),
-    sourceUrl: 'https://unsplash.com/photos/blank-white-t-shirt-hanging-on-hanger',
+    imageUrl: u('photo-1620799139507-2a76f79a2f4d'),
+    sourceUrl: 'https://unsplash.com/photos/white-crew-neck-t-shirt-elbKS4DY21g',
   },
   {
     code: 'TT-101',
     type: 'Top',
     category: 'tops',
     title: 'Oxford cloth button-down — sky blue',
-    imageUrl: u('photo-1602810318383-e386cc2a3ccf'),
-    sourceUrl: 'https://unsplash.com/photos/blue-dress-shirt',
+    imageUrl: u('photo-1602810316693-3667c854239a'),
+    sourceUrl: 'https://unsplash.com/photos/blue-button-up-shirt-on-white-table-BKYeLLB1OxI',
   },
   {
     code: 'SW-102',
     type: 'Sweater',
     category: 'tops',
     title: 'Fisherman rib wool sweater — oatmeal',
-    imageUrl: u('photo-1434389677669-e08b4cac3105'),
-    sourceUrl: 'https://unsplash.com/photos/woman-in-white-sweater',
+    imageUrl: u('photo-1621198059871-0d5f9b449233'),
+    sourceUrl: 'https://unsplash.com/photos/white-knit-sweater-on-white-wooden-surface-xEraWP_ZRGU',
   },
   {
     code: 'TR-103',
     type: 'Turtleneck',
     category: 'tops',
     title: 'Fine merino turtleneck — charcoal',
-    imageUrl: u('photo-1521572163474-6864f9cf17ab'),
-    sourceUrl: 'https://unsplash.com/photos/person-wearing-black-turtleneck',
+    imageUrl: u('photo-1618354691551-44de113f0164'),
+    sourceUrl: 'https://unsplash.com/photos/black-long-sleeve-shirt-on-white-table-A7f7XRKgUWc',
   },
   {
     code: 'JK-104',
     type: 'Jacket',
     category: 'tops',
     title: 'Leather moto jacket — black',
-    imageUrl: u('photo-1551028719-00167b16eac5'),
-    sourceUrl: 'https://unsplash.com/photos/black-leather-jacket',
+    imageUrl: u('photo-1727515192207-3dc860bfd773'),
+    sourceUrl: 'https://unsplash.com/photos/a-black-leather-jacket-laying-on-a-black-cloth-eELIrBJXBPk',
   },
   {
     code: 'JK-105',
     type: 'Jacket',
     category: 'tops',
     title: 'Raw denim trucker jacket — indigo',
-    imageUrl: u('photo-1542272604-787c3835535d'),
-    sourceUrl: 'https://unsplash.com/photos/person-wearing-blue-denim-jacket',
+    imageUrl: u('photo-1571945153237-4929e783af4a'),
+    sourceUrl: 'https://unsplash.com/photos/1571945153237-4929e783af4a',
   },
   {
     code: 'CT-106',
     type: 'Coat',
     category: 'tops',
     title: 'Double-breasted wool coat — camel',
-    imageUrl: u('photo-1539533018447-63fcce2678e3'),
-    sourceUrl: 'https://unsplash.com/photos/woman-wearing-brown-coat',
+    imageUrl: u('photo-1551488831-00ddcb6c6bd3'),
+    sourceUrl: 'https://unsplash.com/photos/1551488831-00ddcb6c6bd3',
   },
   {
     code: 'DR-107',
     type: 'Dress',
     category: 'tops',
     title: 'Midi slip dress — black satin',
-    imageUrl: u('photo-1496747611176-843222e1e57c'),
-    sourceUrl: 'https://unsplash.com/photos/woman-wearing-black-dress-standing',
+    imageUrl: u('photo-1590874103328-eac38a683ce7'),
+    sourceUrl: 'https://unsplash.com/photos/1590874103328-eac38a683ce7',
   },
   {
     code: 'DR-108',
     type: 'Dress',
     category: 'tops',
     title: 'Wrap midi dress — botanical print',
-    imageUrl: u('photo-1595777457583-95e059d581b8'),
-    sourceUrl: 'https://unsplash.com/photos/woman-wearing-white-and-green-dress',
+    imageUrl: u('photo-1583743814966-8936f5b7be1a'),
+    sourceUrl: 'https://unsplash.com/photos/1583743814966-8936f5b7be1a',
   },
   {
     code: 'BD-109',
     type: 'Bodysuit',
     category: 'tops',
     title: 'Scoop-neck jersey bodysuit — black',
-    imageUrl: u('photo-1469334031218-e382a71b716b'),
-    sourceUrl: 'https://unsplash.com/photos/woman-wearing-black-scoop-neck-shirt',
+    imageUrl: u('photo-1606051600761-3753de5474e6'),
+    sourceUrl: 'https://unsplash.com/photos/black-crew-neck-shirt-on-white-textile-8pz6uWwwEcQ',
   },
   {
     code: 'BR-110',
@@ -128,24 +128,24 @@ export const WARDROBE_TEST_ITEMS: WardrobeSeedItem[] = [
     type: 'Pants',
     category: 'bottoms',
     title: 'High-rise straight jeans — vintage blue',
-    imageUrl: u('photo-1541099649105-f69ad21f3246'),
-    sourceUrl: 'https://unsplash.com/photos/blue-denim-jeans',
+    imageUrl: u('photo-1604176354204-9268737828e4'),
+    sourceUrl: 'https://unsplash.com/photos/1604176354204-9268737828e4',
   },
   {
     code: 'PN-201',
     type: 'Pants',
     category: 'bottoms',
     title: 'Pleated wool trousers — charcoal',
-    imageUrl: u('photo-1594938298603-c8148c4dae35'),
-    sourceUrl: 'https://unsplash.com/photos/person-wearing-black-pants',
+    imageUrl: u('photo-1473966968600-fa801b869a1a'),
+    sourceUrl: 'https://unsplash.com/photos/khaki-pants',
   },
   {
     code: 'PN-202',
     type: 'Pants',
     category: 'bottoms',
     title: 'Tailored chinos — stone',
-    imageUrl: u('photo-1473966968600-fa801b869a1a'),
-    sourceUrl: 'https://unsplash.com/photos/khaki-pants',
+    imageUrl: u('photo-1541099649105-f69ad21f3246'),
+    sourceUrl: 'https://unsplash.com/photos/blue-denim-jeans',
   },
   {
     code: 'SH-203',
@@ -160,8 +160,8 @@ export const WARDROBE_TEST_ITEMS: WardrobeSeedItem[] = [
     type: 'Skirt',
     category: 'bottoms',
     title: 'Pleated midi skirt — navy',
-    imageUrl: u('photo-1469334031218-e382a71b716b'),
-    sourceUrl: 'https://unsplash.com/photos/woman-wearing-blue-skirt',
+    imageUrl: u('photo-1635447272615-a414b7ea1df4'),
+    sourceUrl: 'https://unsplash.com/photos/a-pair-of-black-shoes-a-black-sweater-and-a-pair-of-black-sunglasses-L4rQueW3oEQ',
   },
   {
     code: 'UW-205',
@@ -176,24 +176,24 @@ export const WARDROBE_TEST_ITEMS: WardrobeSeedItem[] = [
     type: 'Leggings',
     category: 'bottoms',
     title: 'High-rise pocket leggings — black',
-    imageUrl: u('photo-1518611012118-696072aa579a'),
-    sourceUrl: 'https://unsplash.com/photos/woman-wearing-black-leggings',
+    imageUrl: u('photo-1529374255404-311a2a4f1fd9'),
+    sourceUrl: 'https://unsplash.com/photos/white-hotel-printed-crew-neck-shirt-on-black-surface-9ugEeqflo70',
   },
   {
     code: 'PN-207',
     type: 'Pants',
     category: 'bottoms',
     title: 'Relaxed cargo pants — olive',
-    imageUrl: u('photo-1506629082955-511b1e56f768'),
-    sourceUrl: 'https://unsplash.com/photos/person-wearing-green-pants',
+    imageUrl: u('photo-1544022613-e87ca75a784a'),
+    sourceUrl: 'https://unsplash.com/photos/1544022613-e87ca75a784a',
   },
   {
     code: 'PN-208',
     type: 'Pants',
     category: 'bottoms',
     title: 'Wide-leg wool trousers — cream',
-    imageUrl: u('photo-1594633312681-425c7b97ccd1'),
-    sourceUrl: 'https://unsplash.com/photos/woman-wearing-white-pants',
+    imageUrl: u('photo-1715859019107-90c16285b149'),
+    sourceUrl: 'https://unsplash.com/photos/a-shirt-and-a-pair-of-earrings-on-a-bed-NLBTc-0CCz8',
   },
   {
     code: 'JG-209',
@@ -274,8 +274,8 @@ export const WARDROBE_TEST_ITEMS: WardrobeSeedItem[] = [
     type: 'Socks',
     category: 'accessories',
     title: 'Ribbed crew socks — oatmeal 3-pack',
-    imageUrl: u('photo-1586350977773-b3b0ac50d99b'),
-    sourceUrl: 'https://unsplash.com/photos/folded-socks',
+    imageUrl: u('photo-1617127365659-c47fa864d8bc'),
+    sourceUrl: 'https://unsplash.com/photos/1617127365659-c47fa864d8bc',
   },
   {
     code: 'SN-309',
