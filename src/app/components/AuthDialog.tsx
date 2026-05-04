@@ -12,6 +12,7 @@ import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Button } from '@/app/components/ui/button';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+import { getAuthEmailRedirectUrl } from '@/lib/site-url';
 import { updateProfile } from '@/lib/supabase/sync';
 
 type Mode = 'signin' | 'signup';
@@ -90,8 +91,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo:
-            typeof window !== 'undefined' ? `${window.location.origin}/` : undefined,
+          emailRedirectTo: getAuthEmailRedirectUrl(),
           data: name ? { display_name: name } : undefined,
         },
       });
@@ -131,7 +131,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
     try {
       const supabase = createBrowserSupabaseClient();
       const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
-        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/` : undefined,
+        redirectTo: getAuthEmailRedirectUrl(),
       });
       if (error) {
         setFormError(error.message);
