@@ -3,6 +3,8 @@
  * Safe to replace or clear in production when persisting real user data.
  */
 
+import type { WardrobeItem } from '@/types/wardrobe';
+
 export type WardrobeSeedCategory = 'tops' | 'bottoms' | 'accessories';
 
 export interface WardrobeSeedItem {
@@ -12,6 +14,17 @@ export interface WardrobeSeedItem {
   imageUrl: string;
   title: string;
   sourceUrl?: string;
+}
+
+export function wardrobeSeedToItem(s: WardrobeSeedItem): WardrobeItem {
+  return {
+    code: s.code,
+    type: s.type,
+    category: s.category,
+    imageUrl: s.imageUrl,
+    title: s.title,
+    ...(s.sourceUrl ? { sourceUrl: s.sourceUrl } : {}),
+  };
 }
 
 const u = (id: string) =>
@@ -158,6 +171,38 @@ export const WARDROBE_TEST_ITEMS: WardrobeSeedItem[] = [
     imageUrl: u('photo-1515886657613-9f3515b0c78f'),
     sourceUrl: 'https://unsplash.com/photos/underwear-flatlay',
   },
+  {
+    code: 'LG-206',
+    type: 'Leggings',
+    category: 'bottoms',
+    title: 'High-rise pocket leggings — black',
+    imageUrl: u('photo-1518611012118-696072aa579a'),
+    sourceUrl: 'https://unsplash.com/photos/woman-wearing-black-leggings',
+  },
+  {
+    code: 'PN-207',
+    type: 'Pants',
+    category: 'bottoms',
+    title: 'Relaxed cargo pants — olive',
+    imageUrl: u('photo-1506629082955-511b1e56f768'),
+    sourceUrl: 'https://unsplash.com/photos/person-wearing-green-pants',
+  },
+  {
+    code: 'PN-208',
+    type: 'Pants',
+    category: 'bottoms',
+    title: 'Wide-leg wool trousers — cream',
+    imageUrl: u('photo-1594633312681-425c7b97ccd1'),
+    sourceUrl: 'https://unsplash.com/photos/woman-wearing-white-pants',
+  },
+  {
+    code: 'JG-209',
+    type: 'Joggers',
+    category: 'bottoms',
+    title: 'Tapered fleece joggers — heather grey',
+    imageUrl: u('photo-1556821840-3a63f95609a7'),
+    sourceUrl: 'https://unsplash.com/photos/grey-sweatpants-flatlay',
+  },
 
   // Accessories
   {
@@ -199,5 +244,45 @@ export const WARDROBE_TEST_ITEMS: WardrobeSeedItem[] = [
     title: 'Quilted crossbody — black',
     imageUrl: u('photo-1548036328-c9fa89d128fa'),
     sourceUrl: 'https://unsplash.com/photos/black-handbag',
+  },
+  {
+    code: 'SG-305',
+    type: 'Sunglasses',
+    category: 'accessories',
+    title: 'Acetate square frames — tortoise',
+    imageUrl: u('photo-1511499767150-a48a237f0083'),
+    sourceUrl: 'https://unsplash.com/photos/brown-sunglasses-on-white-surface',
+  },
+  {
+    code: 'WT-306',
+    type: 'Watch',
+    category: 'accessories',
+    title: 'Minimal steel watch — silver',
+    imageUrl: u('photo-1524592094714-0f0654e20314'),
+    sourceUrl: 'https://unsplash.com/photos/silver-round-chronograph-watch',
+  },
+  {
+    code: 'NK-307',
+    type: 'Necklace',
+    category: 'accessories',
+    title: 'Delicate gold chain — 18"',
+    imageUrl: u('photo-1611591437281-460bfbe1220a'),
+    sourceUrl: 'https://unsplash.com/photos/gold-chain-necklace',
+  },
+  {
+    code: 'SK-308',
+    type: 'Socks',
+    category: 'accessories',
+    title: 'Ribbed crew socks — oatmeal 3-pack',
+    imageUrl: u('photo-1586350977773-b3b0ac50d99b'),
+    sourceUrl: 'https://unsplash.com/photos/folded-socks',
+  },
+  {
+    code: 'SN-309',
+    type: 'Shoes',
+    category: 'accessories',
+    title: 'Low-top leather sneakers — white',
+    imageUrl: u('photo-1549298916-b41d501d3772'),
+    sourceUrl: 'https://unsplash.com/photos/white-sneakers',
   },
 ];

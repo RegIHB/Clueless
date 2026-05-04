@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw } from 'lucide-react';
+import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw, Bug } from 'lucide-react';
 import Image from 'next/image';
 import { ClothingIcon } from './components/ClothingIcon';
 import { ClothingSticker } from './components/ClothingSticker';
@@ -15,20 +15,19 @@ import { SelfieUpload } from './components/SelfieUpload';
 import { AuthDialog } from './components/AuthDialog';
 import { getGarmentImage } from '@/lib/garment-images';
 import { getWardrobeStorageState, storage } from '@/lib/storage';
-import { WARDROBE_TEST_ITEMS } from '@/lib/wardrobe-test-data';
+import { WARDROBE_TEST_ITEMS, wardrobeSeedToItem } from '@/lib/wardrobe-test-data';
 import {
   createBrowserSupabaseClient,
   isSupabaseConfigured,
 } from '@/lib/supabase/client';
 import {
-  countWardrobeItems,
   fetchProfile,
   fetchSavedOutfits,
   fetchWardrobe,
   insertSavedOutfit,
   deleteSavedOutfit,
   insertWardrobeItem,
-  seedWardrobeFromDemo,
+  bulkInsertWardrobeItems,
   ensureProfileRow,
   updateProfile,
 } from '@/lib/supabase/sync';
@@ -110,9 +109,8 @@ export default function App() {
   const [userName, setUserName] = useState('Alex');
   const [supabaseReady, setSupabaseReady] = useState(!SUPABASE_ON);
 
-  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>(() =>
-    SUPABASE_ON ? [] : [...WARDROBE_TEST_ITEMS]
-  );
+  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
+  const [debugFillLoading, setDebugFillLoading] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -122,6 +120,8 @@ export default function App() {
   const mountedRef = useRef(true);
   /** Set whenever Supabase session is verified; used for synchronous localStorage writes (no async getSession race). */
   const wardrobeUserIdRef = useRef<string | null>(null);
+  /** Last user id we loaded saved outfits for — clear list when switching accounts. */
+  const savedOutfitsUserIdRef = useRef<string | null>(null);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -145,6 +145,11 @@ export default function App() {
     }
     wardrobeUserIdRef.current = uid;
 
+    if (savedOutfitsUserIdRef.current !== null && savedOutfitsUserIdRef.current !== uid) {
+      setSavedOutfits([]);
+    }
+    savedOutfitsUserIdRef.current = uid;
+
     let profile = await fetchProfile(supabase, uid);
     if (!profile) {
       await ensureProfileRow(supabase, uid);
@@ -166,10 +171,6 @@ export default function App() {
     } else if (localState.kind === 'empty') {
       setWardrobeItems([]);
     } else {
-      const n = await countWardrobeItems(supabase, uid);
-      if (n === 0) {
-        await seedWardrobeFromDemo(supabase, uid, WARDROBE_TEST_ITEMS);
-      }
       const items = await fetchWardrobe(supabase, uid);
       if (!mountedRef.current) return true;
       if (items === null) {
@@ -192,6 +193,7 @@ export default function App() {
 
   const clearRemoteSessionState = useCallback(() => {
     wardrobeUserIdRef.current = null;
+    savedOutfitsUserIdRef.current = null;
     setIsLoggedIn(false);
     setLocation('Berlin');
     setWeather({ temp: 12, condition: 'Cloudy' });
@@ -229,7 +231,8 @@ export default function App() {
       }
     } catch (e) {
       console.error('Post sign-in sync failed', e);
-      setWardrobeItems([...WARDROBE_TEST_ITEMS]);
+      setWardrobeItems([]);
+      setSavedOutfits([]);
     }
     router.refresh();
   }, [hydrateRemoteUser, router, clearRemoteSessionState]);
@@ -269,7 +272,10 @@ export default function App() {
           if (!ok && !cancelled) clearRemoteSessionState();
         } catch (e) {
           console.error('Supabase bootstrap failed', e);
-          if (!cancelled) setWardrobeItems([...WARDROBE_TEST_ITEMS]);
+          if (!cancelled) {
+            setWardrobeItems([]);
+            setSavedOutfits([]);
+          }
         }
       } else {
         clearRemoteSessionState();
@@ -700,6 +706,49 @@ export default function App() {
       showToast(`${item.type} added to wardrobe!`);
     }
   };
+
+  const handleDebugFillWardrobe = useCallback(async () => {
+    const prev = wardrobeItems;
+    const existing = new Set(prev.map((i) => i.code));
+    const additions = WARDROBE_TEST_ITEMS.filter((s) => !existing.has(s.code)).map(wardrobeSeedToItem);
+    if (additions.length === 0) {
+      showToast('All debug seed items are already in your wardrobe');
+      return;
+    }
+    const next = [...prev, ...additions];
+    setWardrobeItems(next);
+    const uid = wardrobeUserIdRef.current;
+    if (uid) storage.setWardrobe(uid, next);
+
+    if (!SUPABASE_ON) {
+      showToast(`Added ${additions.length} debug wardrobe items`);
+      return;
+    }
+
+    setDebugFillLoading(true);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      await supabase.auth.refreshSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        showToast('Sign in to save debug items to your wardrobe', 'error');
+        return;
+      }
+      const result = await bulkInsertWardrobeItems(supabase, session.user.id, additions, prev.length);
+      if ('error' in result) {
+        showToast(`Saved on device; cloud error: ${result.error}`, 'error');
+        return;
+      }
+      showToast(`Added ${additions.length} debug wardrobe items`);
+    } catch (e) {
+      console.warn('Debug wardrobe fill sync failed', e);
+      showToast('Saved on device; cloud sync failed', 'error');
+    } finally {
+      setDebugFillLoading(false);
+    }
+  }, [wardrobeItems]);
 
   const handleTryOn = async () => {
     if (!userSelfie) {
@@ -2211,21 +2260,21 @@ export default function App() {
                 lineHeight: 0.95,
                 letterSpacing: '-0.02em'
               }}>
-                142 ITEMS
+                {wardrobeItems.length} ITEM{wardrobeItems.length === 1 ? '' : 'S'}
               </h2>
-              <p className="mb-12" style={{ fontSize: '24px', fontWeight: 700 }}>
-                23 CURATED OUTFITS
+              <p className="mb-12" style={{ fontSize: 'clamp(18px, 3vw, 24px)', fontWeight: 700 }}>
+                {savedOutfits.length} SAVED OUTFIT{savedOutfits.length === 1 ? '' : 'S'}
               </p>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 {[
-                  { label: 'TOPS', count: '48' },
-                  { label: 'BOTTOMS', count: '32' },
-                  { label: 'SHOES', count: '24' },
-                  { label: 'ACCESSORIES', count: '38' }
+                  { label: 'TOPS', count: wardrobeItems.filter((i) => i.category === 'tops').length },
+                  { label: 'BOTTOMS', count: wardrobeItems.filter((i) => i.category === 'bottoms').length },
+                  { label: 'ACCESSORIES', count: wardrobeItems.filter((i) => i.category === 'accessories').length },
+                  { label: 'SAVED LOOKS', count: savedOutfits.length },
                 ].map((stat, idx) => (
                   <motion.div
-                    key={idx}
+                    key={stat.label}
                     initial={false}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
@@ -2358,6 +2407,31 @@ export default function App() {
       {/* Floating Action Buttons */}
       {isLoggedIn && !showChat && currentView === 'wardrobe' && (
         <>
+          <motion.button
+            initial={false}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.9, type: 'spring', damping: 20 }}
+            whileHover={{ scale: debugFillLoading ? 1 : 1.08 }}
+            whileTap={{ scale: debugFillLoading ? 1 : 0.95 }}
+            onClick={() => void handleDebugFillWardrobe()}
+            disabled={debugFillLoading}
+            className="fixed bottom-8 left-6 z-[60] w-12 h-12 rounded-full flex items-center justify-center shadow-[0_8px_28px_rgba(0,0,0,0.18)] transition-shadow duration-200 ease-out disabled:opacity-60"
+            style={{
+              background: '#f59e0b',
+              color: '#000',
+              border: '2px solid #000',
+            }}
+            type="button"
+            title="Testing: add sample wardrobe items (10+ per category)"
+            aria-label="Fill wardrobe with sample items for testing"
+          >
+            {debugFillLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2.5} aria-hidden />
+            ) : (
+              <Bug className="w-5 h-5" strokeWidth={2.5} aria-hidden />
+            )}
+          </motion.button>
+
           <motion.button
             initial={false}
             animate={{ scale: 1, opacity: 1 }}

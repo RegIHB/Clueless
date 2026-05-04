@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeItem } from '@/types/wardrobe';
-import type { WardrobeSeedItem } from '@/lib/wardrobe-test-data';
 
 type ProfileRow = {
   id: string;
@@ -117,31 +116,6 @@ export async function countWardrobeItems(
   return count ?? 0;
 }
 
-export async function seedWardrobeFromDemo(
-  supabase: SupabaseClient,
-  userId: string,
-  items: WardrobeSeedItem[]
-) {
-  const rows = items.map((item, index) => ({
-    user_id: userId,
-    code: item.code,
-    type: item.type,
-    category: item.category,
-    image_url: item.imageUrl ?? null,
-    title: item.title ?? null,
-    source_url: item.sourceUrl ?? null,
-    attribution: null,
-    sort_order: index,
-  }));
-
-  const { error } = await supabase.from('wardrobe_items').insert(rows);
-  if (error) {
-    console.error('seedWardrobeFromDemo', error);
-    return false;
-  }
-  return true;
-}
-
 const MAX_IMAGE_URL_DB = 8000;
 
 function imageUrlForDb(url?: string): string | null {
@@ -172,6 +146,35 @@ export async function insertWardrobeItem(
   });
   if (error) {
     console.error('insertWardrobeItem', error);
+    return { error: error.message || 'Insert failed' };
+  }
+  return { ok: true };
+}
+
+/** Batch insert for dev tools; `startSortOrder` should match existing row count. */
+export async function bulkInsertWardrobeItems(
+  supabase: SupabaseClient,
+  userId: string,
+  items: WardrobeItem[],
+  startSortOrder: number
+): Promise<{ ok: true } | { error: string }> {
+  if (items.length === 0) return { ok: true };
+  const rows = items.map((item, index) => ({
+    user_id: userId,
+    code: item.code,
+    type: item.type,
+    category: item.category,
+    image_url: imageUrlForDb(item.imageUrl),
+    title: item.title ?? null,
+    source_url: item.sourceUrl
+      ? item.sourceUrl.slice(0, MAX_IMAGE_URL_DB)
+      : null,
+    attribution: item.attribution ?? null,
+    sort_order: startSortOrder + index,
+  }));
+  const { error } = await supabase.from('wardrobe_items').insert(rows);
+  if (error) {
+    console.error('bulkInsertWardrobeItems', error);
     return { error: error.message || 'Insert failed' };
   }
   return { ok: true };
