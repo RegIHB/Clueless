@@ -13,6 +13,7 @@ import { UploadFlow } from './components/UploadFlow';
 import { EmptyState } from './components/EmptyState';
 import { SelfieUpload } from './components/SelfieUpload';
 import { AuthDialog } from './components/AuthDialog';
+import { ResetPasswordDialog } from './components/ResetPasswordDialog';
 import { getGarmentImage } from '@/lib/garment-images';
 import { getWardrobeStorageState, storage } from '@/lib/storage';
 import { WARDROBE_TEST_ITEMS, wardrobeSeedToItem } from '@/lib/wardrobe-test-data';
@@ -79,7 +80,8 @@ export default function App() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(!SUPABASE_ON);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
-  const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup'>('signin');
+  const [showPasswordRecovery, setShowPasswordRecovery] = useState(false);
+  const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<WardrobeCategory>('tops');
@@ -296,6 +298,11 @@ export default function App() {
         return;
       }
 
+      if (event === 'PASSWORD_RECOVERY') {
+        setShowPasswordRecovery(true);
+        return;
+      }
+
       if (event === 'SIGNED_IN') {
         setIsLoggedIn(true);
         if (session?.user) {
@@ -321,6 +328,15 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, [hydrateRemoteUser, router, clearRemoteSessionState]);
+
+  useEffect(() => {
+    if (!SUPABASE_ON || !supabaseReady) return;
+    if (typeof window === 'undefined') return;
+    const { hash, search } = window.location;
+    if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+      setShowPasswordRecovery(true);
+    }
+  }, [supabaseReady]);
 
   useEffect(() => {
     if (SUPABASE_ON) return;
@@ -367,7 +383,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh when tab opens
   }, [currentView, SUPABASE_ON, isLoggedIn]);
 
-  const openAuth = useCallback((mode: 'signin' | 'signup') => {
+  const openAuth = useCallback((mode: 'signin' | 'signup' | 'forgot') => {
     if (!SUPABASE_ON) {
       setIsLoggedIn(true);
       setSavedOutfits(loadLocalSavedOutfits());
@@ -709,19 +725,21 @@ export default function App() {
 
   const handleDebugFillWardrobe = useCallback(async () => {
     const prev = wardrobeItems;
-    const existing = new Set(prev.map((i) => i.code));
-    const additions = WARDROBE_TEST_ITEMS.filter((s) => !existing.has(s.code)).map(wardrobeSeedToItem);
-    if (additions.length === 0) {
-      showToast('All debug seed items are already in your wardrobe');
-      return;
-    }
-    const next = [...prev, ...additions];
-    setWardrobeItems(next);
-    const uid = wardrobeUserIdRef.current;
-    if (uid) storage.setWardrobe(uid, next);
+    const existingLocal = new Set(prev.map((i) => i.code));
+    const additionsLocal = WARDROBE_TEST_ITEMS.filter((s) => !existingLocal.has(s.code)).map(
+      wardrobeSeedToItem
+    );
 
     if (!SUPABASE_ON) {
-      showToast(`Added ${additions.length} debug wardrobe items`);
+      if (additionsLocal.length === 0) {
+        showToast('All debug seed items are already in your wardrobe');
+        return;
+      }
+      const next = [...prev, ...additionsLocal];
+      setWardrobeItems(next);
+      const uid = wardrobeUserIdRef.current;
+      if (uid) storage.setWardrobe(uid, next);
+      showToast(`Added ${additionsLocal.length} debug wardrobe items`);
       return;
     }
 
@@ -730,21 +748,49 @@ export default function App() {
       const supabase = createBrowserSupabaseClient();
       await supabase.auth.refreshSession();
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user) {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
         showToast('Sign in to save debug items to your wardrobe', 'error');
         return;
       }
-      const result = await bulkInsertWardrobeItems(supabase, session.user.id, additions, prev.length);
-      if ('error' in result) {
-        showToast(`Saved on device; cloud error: ${result.error}`, 'error');
+
+      const cloud = await fetchWardrobe(supabase, user.id);
+      if (cloud === null) {
+        showToast('Could not load wardrobe from the cloud. Check your connection and try again.', 'error');
         return;
       }
-      showToast(`Added ${additions.length} debug wardrobe items`);
+
+      const cloudCodes = new Set(cloud.map((i) => i.code));
+      const toInsert = WARDROBE_TEST_ITEMS.filter((s) => !cloudCodes.has(s.code)).map(wardrobeSeedToItem);
+      const startSortOrder = cloud.length;
+
+      if (toInsert.length === 0) {
+        setWardrobeItems(cloud);
+        storage.setWardrobe(user.id, cloud);
+        showToast('Your cloud wardrobe already includes all seed items.');
+        return;
+      }
+
+      const result = await bulkInsertWardrobeItems(supabase, user.id, toInsert, startSortOrder);
+      if ('error' in result) {
+        showToast(`Cloud sync failed: ${result.error}`, 'error');
+        return;
+      }
+
+      const fresh = await fetchWardrobe(supabase, user.id);
+      if (fresh) {
+        setWardrobeItems(fresh);
+        storage.setWardrobe(user.id, fresh);
+      } else {
+        const next = [...prev, ...toInsert];
+        setWardrobeItems(next);
+        storage.setWardrobe(user.id, next);
+      }
+      showToast(`Added ${toInsert.length} items to your cloud wardrobe`);
     } catch (e) {
       console.warn('Debug wardrobe fill sync failed', e);
-      showToast('Saved on device; cloud sync failed', 'error');
+      showToast('Cloud sync failed. Try again.', 'error');
     } finally {
       setDebugFillLoading(false);
     }
@@ -2478,6 +2524,17 @@ export default function App() {
           onOpenChange={setShowAuthDialog}
           initialMode={authInitialMode}
           onSignedIn={handleAuthDialogSignedIn}
+        />
+      )}
+
+      {SUPABASE_ON && (
+        <ResetPasswordDialog
+          open={showPasswordRecovery}
+          onOpenChange={setShowPasswordRecovery}
+          onPasswordUpdated={() => {
+            showToast('Password updated. You are signed in.');
+            router.refresh();
+          }}
         />
       )}
 

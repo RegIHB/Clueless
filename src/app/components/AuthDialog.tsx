@@ -11,32 +11,35 @@ import {
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Button } from '@/app/components/ui/button';
+import { Eye, EyeOff } from 'lucide-react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { getAuthEmailRedirectUrl } from '@/lib/site-url';
 import { updateProfile } from '@/lib/supabase/sync';
 
-type Mode = 'signin' | 'signup';
+type Mode = 'signin' | 'signup' | 'forgot';
 
 type AuthDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** When the dialog opens, start on this tab (matches “Sign in” vs “Create account” CTAs). */
-  initialMode?: Mode;
+  initialMode?: 'signin' | 'signup' | 'forgot';
   /** Run after email sign-in / sign-up returns a session so UI updates without a full reload. */
   onSignedIn?: () => void | Promise<void>;
 };
 
 export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSignedIn }: AuthDialogProps) {
   const [mode, setMode] = useState<Mode>(initialMode);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [displayName, setDisplayName] = useState('');
 
   useEffect(() => {
     if (open) {
       setMode(initialMode);
+      setShowPassword(false);
     }
   }, [open, initialMode]);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -120,11 +123,12 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
     }
   };
 
-  const handleResetPassword = async () => {
+  const handleResetPassword = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     resetMessages();
     const trimmed = email.trim();
     if (!trimmed) {
-      setFormError('Enter your email above first.');
+      setFormError('Enter your email address.');
       return;
     }
     setBusy(true);
@@ -151,6 +155,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
         if (!next) {
           resetMessages();
           setPassword('');
+          setShowPassword(false);
         }
       }}
     >
@@ -160,17 +165,25 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
       >
         <DialogHeader>
           <DialogTitle className="text-xl font-black tracking-tight uppercase">
-            {mode === 'signin' ? 'Sign in' : 'Create account'}
+            {mode === 'forgot' ? 'Reset password' : mode === 'signin' ? 'Sign in' : 'Create account'}
           </DialogTitle>
           <DialogDescription className="text-sm font-medium text-black/70">
-            {mode === 'signin'
-              ? 'Use the email and password for your Clueless account.'
-              : 'Sign up to sync your wardrobe and saved outfits across devices.'}
+            {mode === 'forgot'
+              ? 'Enter your email and we will send you a link to choose a new password.'
+              : mode === 'signin'
+                ? 'Use the email and password for your Clueless account.'
+                : 'Sign up to sync your wardrobe and saved outfits across devices.'}
           </DialogDescription>
         </DialogHeader>
 
         <form
-          onSubmit={mode === 'signin' ? handleSignIn : handleSignUp}
+          onSubmit={
+            mode === 'signin'
+              ? handleSignIn
+              : mode === 'signup'
+                ? handleSignUp
+                : (ev) => void handleResetPassword(ev)
+          }
           className="flex flex-col gap-4"
         >
           {mode === 'signup' && (
@@ -201,21 +214,38 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
               className="border-2 border-black bg-white"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="auth-password">Password</Label>
-            <Input
-              id="auth-password"
-              name="password"
-              type="password"
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-              required
-              value={password}
-              onChange={(ev) => setPassword(ev.target.value)}
-              placeholder="••••••••"
-              minLength={mode === 'signup' ? 6 : undefined}
-              className="border-2 border-black bg-white"
-            />
-          </div>
+          {mode !== 'forgot' && (
+            <div className="space-y-2">
+              <Label htmlFor="auth-password">Password</Label>
+              <div className="relative">
+                <Input
+                  id="auth-password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                  required
+                  value={password}
+                  onChange={(ev) => setPassword(ev.target.value)}
+                  placeholder="••••••••"
+                  minLength={mode === 'signup' ? 6 : undefined}
+                  className="border-2 border-black bg-white pr-11"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-black/60 transition-colors hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
+                  ) : (
+                    <Eye className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
 
           {formError && (
             <p className="text-sm font-semibold text-red-700" role="alert">
@@ -233,14 +263,23 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
             disabled={busy}
             className="h-11 border-2 border-black bg-black text-white hover:bg-black/90 font-bold tracking-wide"
           >
-            {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
+            {busy
+              ? 'Please wait…'
+              : mode === 'signin'
+                ? 'Sign in'
+                : mode === 'signup'
+                  ? 'Create account'
+                  : 'Send reset link'}
           </Button>
         </form>
 
         {mode === 'signin' && (
           <button
             type="button"
-            onClick={() => void handleResetPassword()}
+            onClick={() => {
+              resetMessages();
+              setMode('forgot');
+            }}
             disabled={busy}
             className="text-xs font-bold text-black/70 underline underline-offset-2 hover:text-black disabled:opacity-50"
           >
@@ -249,7 +288,20 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
         )}
 
         <p className="text-center text-sm font-medium text-black/70">
-          {mode === 'signin' ? (
+          {mode === 'forgot' ? (
+            <>
+              <button
+                type="button"
+                className="font-bold text-black underline underline-offset-2"
+                onClick={() => {
+                  resetMessages();
+                  setMode('signin');
+                }}
+              >
+                Back to sign in
+              </button>
+            </>
+          ) : mode === 'signin' ? (
             <>
               No account?{' '}
               <button
