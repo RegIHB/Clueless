@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   Dialog,
   DialogContent,
@@ -196,8 +197,12 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
               autoComplete="email"
               required
               value={email}
-              onChange={(ev) => setEmail(ev.target.value)}
+              onChange={(ev) => {
+                setEmail(ev.target.value);
+                if (formError) setFormError(null);
+              }}
               placeholder="you@example.com"
+              aria-invalid={formError ? true : undefined}
               className="border-2 border-black bg-white"
             />
           </div>
@@ -210,26 +215,51 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               required
               value={password}
-              onChange={(ev) => setPassword(ev.target.value)}
+              onChange={(ev) => {
+                setPassword(ev.target.value);
+                if (formError) setFormError(null);
+              }}
               placeholder="••••••••"
               minLength={mode === 'signup' ? 6 : undefined}
+              aria-invalid={formError ? true : undefined}
               className="border-2 border-black bg-white"
             />
           </div>
 
-          {formError && (
-            <p className="text-sm font-semibold text-red-700" role="alert">
-              {formError}
-            </p>
-          )}
-          {infoMessage && (
-            <p className="text-sm font-medium text-black/80" role="status">
-              {infoMessage}
-            </p>
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {formError && (
+              <motion.p
+                key="form-error"
+                initial={{ opacity: 0, y: -4, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -4, height: 0 }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                className="text-sm font-semibold text-red-700 overflow-hidden"
+                role="alert"
+                aria-live="assertive"
+              >
+                {formError}
+              </motion.p>
+            )}
+            {infoMessage && (
+              <motion.p
+                key="form-info"
+                initial={{ opacity: 0, y: -4, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -4, height: 0 }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                className="text-sm font-medium text-black/80 overflow-hidden"
+                role="status"
+                aria-live="polite"
+              >
+                {infoMessage}
+              </motion.p>
+            )}
+          </AnimatePresence>
 
           <Button
             type="submit"
+            loading={busy}
             disabled={busy}
             className="h-11 border-2 border-black bg-black text-white hover:bg-black/90 font-bold tracking-wide"
           >
