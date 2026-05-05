@@ -133,13 +133,27 @@ export default function App() {
     };
   }, []);
 
+  /**
+   * `getSession()` can be briefly stale during refresh/navigation; use `getUser()` as the
+   * authoritative source for "who is signed in" before deciding to clear wardrobe state.
+   */
+  const resolveAuthenticatedUserId = useCallback(async (): Promise<string | null> => {
+    const supabase = createBrowserSupabaseClient();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+    if (error) {
+      console.error('resolveAuthenticatedUserId:getUser', error);
+      return null;
+    }
+    return user?.id ?? null;
+  }, []);
+
   const hydrateRemoteUser = useCallback(async (userId: string): Promise<boolean> => {
     const supabase = createBrowserSupabaseClient();
-    await supabase.auth.refreshSession();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const uid = session?.user?.id;
+    await supabase.auth.refreshSession().catch(() => {});
+    const uid = await resolveAuthenticatedUserId();
     if (!uid || uid !== userId) {
       console.error('hydrateRemoteUser: no valid session after refresh', {
         expected: userId,
@@ -200,7 +214,7 @@ export default function App() {
       setSavedOutfits(outfits);
     }
     return true;
-  }, []);
+  }, [resolveAuthenticatedUserId]);
 
   const clearRemoteSessionState = useCallback(() => {
     wardrobeUserIdRef.current = null;
@@ -245,9 +259,7 @@ export default function App() {
     try {
       const ok = await hydrateRemoteUser(user.id);
       if (!ok) {
-        clearRemoteSessionState();
-        showToast('Session could not be restored. Please sign in again.', 'error');
-        router.refresh();
+        showToast('Could not verify your account yet. Keeping local wardrobe.', 'error');
         return;
       }
     } catch (e) {
@@ -289,7 +301,10 @@ export default function App() {
         }
         try {
           const ok = await hydrateRemoteUser(session.user.id);
-          if (!ok && !cancelled) clearRemoteSessionState();
+          if (!ok && !cancelled) {
+            // Do not wipe state on ambiguous auth reads. SIGNED_OUT will clear state when definitive.
+            console.warn('bootstrapFromStorage: hydrateRemoteUser could not verify user');
+          }
         } catch (e) {
           console.error('Supabase bootstrap failed', e);
           // Keep any already-hydrated local data; avoid wiping wardrobe on transient network/auth failures.
@@ -323,7 +338,9 @@ export default function App() {
         if (session?.user) {
           try {
             const ok = await hydrateRemoteUser(session.user.id);
-            if (!ok) clearRemoteSessionState();
+            if (!ok) {
+              console.warn('SIGNED_IN hydrate could not verify user; preserving local state');
+            }
           } catch (e) {
             console.error('SIGNED_IN hydrate failed', e);
           }
