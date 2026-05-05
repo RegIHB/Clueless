@@ -59,6 +59,7 @@ async function weatherPayloadForCoords(geo: GeoCoords) {
 }
 
 export async function GET(request: NextRequest) {
+  const auto = request.nextUrl.searchParams.get("auto");
   const latParam = request.nextUrl.searchParams.get("lat");
   const lonParam = request.nextUrl.searchParams.get("lon");
 
@@ -77,7 +78,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const city = request.nextUrl.searchParams.get("city") ?? "Berlin";
+    const headerCity =
+      request.headers.get("x-vercel-ip-city") ||
+      request.headers.get("x-geo-city") ||
+      request.headers.get("cf-ipcity") ||
+      request.headers.get("x-appengine-city");
+    const city =
+      request.nextUrl.searchParams.get("city") ??
+      (auto === "1" ? headerCity ?? "Berlin" : "Berlin");
     const geo = await geocodeCity(city);
     if (!geo) {
       return NextResponse.json({ error: "City not found" }, { status: 404 });

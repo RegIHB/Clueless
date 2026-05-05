@@ -47,7 +47,7 @@ const LOCAL_SAVED_OUTFITS_USER_PREFIX = 'clueless_saved_outfits_user_v1';
 const LOCAL_TRYON_HISTORY_KEY = 'clueless_tryon_history_v1';
 const LOCAL_SELECTED_OUTFIT_KEY = 'clueless_selected_outfit_v1';
 const LOCAL_SYNC_QUEUE_KEY = 'clueless_sync_queue_v1';
-const MAX_TRYON_HISTORY = 12;
+const TRYON_HISTORY_PAGE_SIZE = 9;
 
 type TryOnHistoryEntry = {
   id: string;
@@ -108,7 +108,7 @@ function loadTryOnHistory(): TryOnHistoryEntry[] {
     const raw = localStorage.getItem(LOCAL_TRYON_HISTORY_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as TryOnHistoryEntry[];
-    return Array.isArray(parsed) ? parsed.slice(0, MAX_TRYON_HISTORY) : [];
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
@@ -313,6 +313,9 @@ export default function App() {
   const [showSelfieUpload, setShowSelfieUpload] = useState(false);
   const [userSelfie, setUserSelfie] = useState<string | null>(null);
   const [location, setLocation] = useState('Berlin');
+  const [hasManualLocation, setHasManualLocation] = useState(false);
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [locationDraft, setLocationDraft] = useState('Berlin');
   const [weather, setWeather] = useState({ temp: 12, condition: 'Cloudy' });
   const [savedOutfits, setSavedOutfits] = useState<SavedOutfit[]>(() =>
     SUPABASE_ON ? [] : loadLocalSavedOutfits()
@@ -330,6 +333,7 @@ export default function App() {
   const [vtoJobId, setVtoJobId] = useState<string | null>(null);
   const [vtoError, setVtoError] = useState<{ code?: VtoErrorCode; message: string } | null>(null);
   const [tryOnHistory, setTryOnHistory] = useState<TryOnHistoryEntry[]>(loadTryOnHistory);
+  const [visibleTryOnCount, setVisibleTryOnCount] = useState(TRYON_HISTORY_PAGE_SIZE);
   const [syncQueue, setSyncQueue] = useState<SyncQueueItem[]>(loadSyncQueue);
   const [isSyncProcessing, setIsSyncProcessing] = useState(false);
   const [tryOnPreviewUrl, setTryOnPreviewUrl] = useState<string | null>(null);
@@ -339,6 +343,14 @@ export default function App() {
   const [supabaseReady, setSupabaseReady] = useState(!SUPABASE_ON);
 
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
+  const estimatedHoursSaved = Math.max(
+    1,
+    Math.round(((savedOutfits.length * 12 + tryOnHistory.length * 4) / 60) * 10) / 10
+  );
+  const stylePanicMomentsPrevented = savedOutfits.length * 2 + tryOnHistory.length;
+  const outfitRepeatsAvoided = Math.max(0, savedOutfits.length - 1);
+  const mirrorMinutesSaved = savedOutfits.length * 7 + tryOnHistory.length * 3;
+  const weatherFaceoffsWon = Math.max(1, Math.round(tryOnHistory.length * 0.7));
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     if (type === 'error') sonnerToast.error(message);
@@ -767,6 +779,9 @@ export default function App() {
       setSelectedOutfit({});
       setIsLoggedIn(false);
       setLocation('Berlin');
+      setHasManualLocation(false);
+      setIsEditingLocation(false);
+      setLocationDraft('Berlin');
       setWeather({ temp: 12, condition: 'Cloudy' });
       return;
     }
@@ -785,6 +800,11 @@ export default function App() {
   useEffect(() => {
     if (!isLoggedIn || hasCompletedOnboarding) return;
     if (SUPABASE_ON && !supabaseReady) return;
+    if (SUPABASE_ON) {
+      // Signed-in users: onboarding is controlled by profile.onboarding_completed.
+      setShowOnboarding(true);
+      return;
+    }
     const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
     if (!hasSeenOnboarding) {
       setShowOnboarding(true);
@@ -816,47 +836,37 @@ export default function App() {
     void fetchWeather();
   }, [location]);
 
-  const geoRequestedRef = useRef(false);
-
-  /** When logged in, resolve city + weather from the browser geolocation (HTTPS / localhost). */
+  /**
+   * Auto-detect location server-side (IP/cdn headers) so we never trigger
+   * browser geolocation permission prompts.
+   */
   useEffect(() => {
-    if (!isLoggedIn) {
-      geoRequestedRef.current = false;
-      return;
-    }
-    if (typeof window === 'undefined' || !('geolocation' in navigator)) return;
-    if (geoRequestedRef.current) return;
-    geoRequestedRef.current = true;
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-        try {
-          const response = await fetch(
-            `/api/weather?lat=${encodeURIComponent(String(latitude))}&lon=${encodeURIComponent(String(longitude))}`
-          );
-          if (!response.ok) return;
-          const payload = await response.json();
-          if (payload?.city && typeof payload.city === 'string') {
-            setLocation(payload.city);
-          }
-          if (payload?.weather?.tempC != null && payload?.weather?.condition) {
-            setWeather({
-              temp: payload.weather.tempC,
-              condition: payload.weather.condition,
-            });
-          }
-        } catch {
-          // keep prior location / weather
+    if (!isLoggedIn || hasManualLocation) return;
+    let cancelled = false;
+    const detectWeather = async () => {
+      try {
+        const response = await fetch('/api/weather?auto=1');
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (cancelled) return;
+        if (payload?.city && typeof payload.city === 'string') {
+          setLocation(payload.city);
         }
-      },
-      () => {
-        // Permission denied or timeout — keep default location (e.g. Berlin).
-      },
-      { enableHighAccuracy: false, maximumAge: 300_000, timeout: 20_000 }
-    );
-  }, [isLoggedIn]);
+        if (payload?.weather?.tempC != null && payload?.weather?.condition) {
+          setWeather({
+            temp: payload.weather.tempC,
+            condition: payload.weather.condition,
+          });
+        }
+      } catch {
+        // keep prior location / weather
+      }
+    };
+    void detectWeather();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, hasManualLocation]);
 
   // Prompt for selfie if not uploaded and wardrobe has items
   useEffect(() => {
@@ -871,7 +881,7 @@ export default function App() {
   const handleOnboardingComplete = async () => {
     setShowOnboarding(false);
     setHasCompletedOnboarding(true);
-    localStorage.setItem('hasSeenOnboarding', 'true');
+    if (!SUPABASE_ON) localStorage.setItem('hasSeenOnboarding', 'true');
     if (SUPABASE_ON) {
       try {
         const supabase = createBrowserSupabaseClient();
@@ -1171,8 +1181,14 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(LOCAL_TRYON_HISTORY_KEY, JSON.stringify(tryOnHistory.slice(0, MAX_TRYON_HISTORY)));
+    localStorage.setItem(LOCAL_TRYON_HISTORY_KEY, JSON.stringify(tryOnHistory));
   }, [tryOnHistory]);
+
+  useEffect(() => {
+    if (tryOnHistory.length === 0) {
+      setVisibleTryOnCount(TRYON_HISTORY_PAGE_SIZE);
+    }
+  }, [tryOnHistory.length]);
 
   useEffect(() => {
     if (!tryOnPreviewUrl) return;
@@ -1216,7 +1232,7 @@ export default function App() {
           garmentImageUrl,
           garmentCode: selectedGarment?.code,
         };
-        setTryOnHistory((prev) => [entry, ...prev.filter((i) => i.id !== entry.id)].slice(0, MAX_TRYON_HISTORY));
+        setTryOnHistory((prev) => [entry, ...prev.filter((i) => i.id !== entry.id)]);
         showToast('Try-on generated');
       }
       if (snapshot.status === 'failed') {
@@ -1637,7 +1653,72 @@ export default function App() {
               }}>
                 <div className="flex items-center gap-2 min-w-0">
                   <MapPin className="w-4 h-4 shrink-0" strokeWidth={2.5} />
-                  <span className="truncate" style={{ fontSize: '12px', fontWeight: 700 }}>{location}</span>
+                  {isEditingLocation ? (
+                    <>
+                      <input
+                        value={locationDraft}
+                        onChange={(e) => setLocationDraft(e.target.value)}
+                        className="min-w-[7rem] rounded-md px-2 py-0.5"
+                        style={{ fontSize: '11px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                        placeholder="City"
+                        aria-label="City"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = locationDraft.trim();
+                          if (!next) return;
+                          setHasManualLocation(true);
+                          setLocation(next);
+                          setIsEditingLocation(false);
+                        }}
+                        className="px-2 py-0.5 rounded-full"
+                        style={{ fontSize: '9px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                        aria-label="Save city"
+                      >
+                        SAVE
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocationDraft(location);
+                          setIsEditingLocation(false);
+                        }}
+                        className="px-2 py-0.5 rounded-full"
+                        style={{ fontSize: '9px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                        aria-label="Cancel city edit"
+                      >
+                        CANCEL
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="truncate" style={{ fontSize: '12px', fontWeight: 700 }}>{location}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocationDraft(location);
+                          setIsEditingLocation(true);
+                        }}
+                        className="px-2 py-0.5 rounded-full"
+                        style={{ fontSize: '9px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                        aria-label="Edit city"
+                      >
+                        EDIT
+                      </button>
+                      {hasManualLocation && (
+                        <button
+                          type="button"
+                          onClick={() => setHasManualLocation(false)}
+                          className="px-2 py-0.5 rounded-full"
+                          style={{ fontSize: '9px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                          aria-label="Use auto detected city"
+                        >
+                          AUTO
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
                 <div className="hidden sm:block w-px h-4 bg-black opacity-20 shrink-0" aria-hidden />
                 <div className="flex items-center gap-2 flex-wrap justify-center min-w-0">
@@ -1679,17 +1760,20 @@ export default function App() {
                         textTransform: 'uppercase',
                       }}
                     >
-                      Your wardrobe workspace
+                      Your outfit command center
                     </h1>
                     <p className="mb-5 max-w-[56ch] text-pretty" style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500, opacity: 0.78 }}>
-                      Pick a category, select an item, and run AI try-on in seconds. Everything below is optimized for fast outfit decisions.
+                      Pick a vibe, tap a piece, and let AI do the closet overthinking. Fewer outfit spirals, more walking out the door.
                     </p>
 
-                    <div className="grid grid-cols-3 gap-3 mb-5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
                       {[
-                        { label: 'WARDROBE', value: wardrobeItems.length },
-                        { label: 'SAVED', value: savedOutfits.length },
-                        { label: 'TRY-ONS', value: tryOnHistory.length },
+                        { label: 'CLOSET PIECES', value: wardrobeItems.length },
+                        { label: 'LOOKS LOCKED', value: savedOutfits.length },
+                        { label: 'FIT CHECKS', value: tryOnHistory.length },
+                        { label: 'HOURS RECLAIMED', value: `${estimatedHoursSaved}h` },
+                        { label: 'PANIC MOMENTS AVOIDED', value: stylePanicMomentsPrevented },
+                        { label: 'WEATHER WINS', value: weatherFaceoffsWon },
                       ].map((kpi) => (
                         <div
                           key={kpi.label}
@@ -1701,6 +1785,9 @@ export default function App() {
                         </div>
                       ))}
                     </div>
+                    <p style={{ fontSize: '11px', fontWeight: 600, opacity: 0.65 }}>
+                      Roughly {mirrorMinutesSaved} mirror minutes saved and {outfitRepeatsAvoided} outfit repeats dodged. Science-ish, but accurate enough.
+                    </p>
 
                     <div className="flex items-center flex-wrap gap-3">
                       <button
@@ -1712,7 +1799,7 @@ export default function App() {
                         className="px-6 py-3 rounded-full text-white inline-flex items-center gap-2"
                         style={{ background: '#000', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
                       >
-                        TRY ON A NEW OUTFIT
+                        MAKE ME LOOK EXPENSIVE
                         <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
                       </button>
                       <button
@@ -1721,7 +1808,7 @@ export default function App() {
                         className="px-6 py-3 rounded-full inline-flex items-center gap-2"
                         style={{ background: '#FFF', border: '2px solid #000', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
                       >
-                        OPEN SAVED LOOKS
+                        OPEN MY HITS
                       </button>
                     </div>
                   </div>
@@ -1732,7 +1819,7 @@ export default function App() {
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.7 }}>
-                        CONTINUE WHERE YOU LEFT OFF
+                        LAST LOOK ENERGY
                       </span>
                       {isGeneratingTryOn && (
                         <span style={{ fontSize: '10px', fontWeight: 700 }}>
@@ -1754,7 +1841,7 @@ export default function App() {
                           <Image src={tryOnHistory[0].imageUrl} alt="Most recent try-on" fill unoptimized className="object-cover" />
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 700 }}>
-                          Re-open latest try-on
+                          Re-open your latest slay
                         </div>
                         <div style={{ fontSize: '11px', fontWeight: 500, opacity: 0.7 }}>
                           {new Date(tryOnHistory[0].createdAt).toLocaleString()}
@@ -1766,10 +1853,10 @@ export default function App() {
                         style={{ background: '#FFE5F1', border: '2px solid #000' }}
                       >
                         <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: 4 }}>
-                          No try-on results yet
+                          No fashion experiments yet
                         </div>
                         <div style={{ fontSize: '11px', fontWeight: 500, opacity: 0.75 }}>
-                          Select a garment below and run your first AI try-on.
+                          Pick an item below and launch your first AI style test.
                         </div>
                       </div>
                     )}
@@ -2649,7 +2736,7 @@ export default function App() {
                     >
                       {isGeneratingTryOn
                         ? `${Math.round(vtoProgress)}%`
-                        : 'RUN AI TRY-ON'}
+                        : 'COOK A TRY-ON'}
                     </motion.button>
 
                     <motion.button
@@ -2667,7 +2754,7 @@ export default function App() {
                       }}
                     >
                       <RotateCcw className="w-4 h-4" strokeWidth={2.5} />
-                      RETRY TRY-ON
+                      ONE MORE FOR SCIENCE
                     </motion.button>
 
                     <motion.button
@@ -2689,7 +2776,7 @@ export default function App() {
                       }}
                     >
                       <Heart className="w-4 h-4" strokeWidth={2.5} />
-                      SAVE OUTFIT
+                      LOCK THIS LOOK
                     </motion.button>
 
                     <motion.button
@@ -2707,7 +2794,7 @@ export default function App() {
                       type="button"
                     >
                       <Camera className="w-4 h-4" strokeWidth={2.5} />
-                      UPLOAD NEW PHOTO
+                      NEW FACE CARD
                     </motion.button>
 
                     {tryOnImageUrl && (
@@ -2725,7 +2812,7 @@ export default function App() {
                         }}
                       >
                         <Download className="w-4 h-4" strokeWidth={2.5} />
-                        DOWNLOAD RESULT
+                        EXPORT RECEIPTS
                       </a>
                     )}
 
@@ -2742,7 +2829,7 @@ export default function App() {
                         letterSpacing: '0.1em'
                       }}
                     >
-                      CLEAR ALL
+                      RESET THE CHAOS
                     </motion.button>
                   </div>
 
@@ -2750,14 +2837,14 @@ export default function App() {
                     <div className="mt-5">
                       <div className="mb-2 flex items-center justify-between">
                         <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em' }}>
-                          RECENT TRY-ONS
+                          RECENT LOOKS
                         </span>
                         <span style={{ fontSize: '10px', fontWeight: 600, opacity: 0.65 }}>
                           {tryOnHistory.length}
                         </span>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                        {tryOnHistory.slice(0, 6).map((entry) => (
+                        {tryOnHistory.slice(0, visibleTryOnCount).map((entry) => (
                           <button
                             key={entry.id}
                             type="button"
@@ -2772,6 +2859,45 @@ export default function App() {
                           </button>
                         ))}
                       </div>
+                      {tryOnHistory.length > TRYON_HISTORY_PAGE_SIZE && (
+                        <div className="mt-3 flex justify-center">
+                          {visibleTryOnCount < tryOnHistory.length ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVisibleTryOnCount((prev) =>
+                                  Math.min(prev + TRYON_HISTORY_PAGE_SIZE, tryOnHistory.length)
+                                )
+                              }
+                              className="px-4 py-2 rounded-full"
+                              style={{
+                                background: '#FFF',
+                                border: '2px solid #000',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                letterSpacing: '0.08em',
+                              }}
+                            >
+                              MORE DRIP
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setVisibleTryOnCount(TRYON_HISTORY_PAGE_SIZE)}
+                              className="px-4 py-2 rounded-full"
+                              style={{
+                                background: '#FFF',
+                                border: '2px solid #000',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                letterSpacing: '0.08em',
+                              }}
+                            >
+                              LESS DRIP
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </motion.div>
@@ -2803,13 +2929,13 @@ export default function App() {
                       fontWeight: 900,
                       letterSpacing: '-0.02em'
                     }}>
-                      SAVED OUTFITS
+                      SAVED LOOKS
                     </h2>
                     <p style={{ fontSize: '15px', fontWeight: 500, opacity: 0.7 }}>
                       {savedOutfits.length} saved {savedOutfits.length === 1 ? 'outfit' : 'outfits'}
                       {SUPABASE_ON && (
                         <span className="block sm:inline sm:before:content-['\00a0\2014\00a0'] sm:before:font-normal mt-1 sm:mt-0 text-[13px]">
-                          Synced to your account
+                          Safely stashed in your account
                         </span>
                       )}
                     </p>
@@ -2838,10 +2964,10 @@ export default function App() {
                   <div className="text-center py-20">
                     <Heart className="w-16 h-16 mx-auto mb-4 opacity-20" strokeWidth={1.5} />
                     <h3 className="mb-3" style={{ fontSize: '24px', fontWeight: 700 }}>
-                      No Saved Outfits Yet
+                      Your saved looks are empty
                     </h3>
                     <p className="mb-6" style={{ fontSize: '14px', opacity: 0.7 }}>
-                      Create and save your favorite outfit combinations from the wardrobe
+                      Build one great fit, hit save, and start your hall-of-fame.
                     </p>
                     <motion.button
                       whileHover={{ scale: 1.05 }}
