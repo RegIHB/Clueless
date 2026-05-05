@@ -64,17 +64,13 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
         setFormError(error.message);
         return;
       }
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      // Close immediately — do not await onSignedIn (hydrate / router.refresh can hang or feel slow).
+      // Close immediately — do not chain extra auth reads here, they can lag while
+      // auth state has already transitioned to signed-in.
       onOpenChange(false);
       setPassword('');
-      if (user) {
-        void Promise.resolve(onSignedIn?.()).catch((err) => {
-          console.error('onSignedIn failed', err);
-        });
-      }
+      void Promise.resolve(onSignedIn?.()).catch((err) => {
+        console.error('onSignedIn failed', err);
+      });
     } catch (err) {
       console.error('signInWithPassword threw', err);
       setFormError(
