@@ -30,7 +30,8 @@ import {
   ensureProfileRow,
   updateProfile,
 } from '@/lib/supabase/sync';
-import { fetchWardrobeFromApi } from '@/lib/wardrobe-api';
+import { fetchCanonicalSyncFromApi, fetchWardrobeFromApi } from '@/lib/wardrobe-api';
+import { getSessionOrchestrator, type AuthOrchestratorState } from '@/lib/auth/session-orchestrator';
 import type { Session } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
 import type { CreateTryOnJobResponse, TryOnJobSnapshot, VtoErrorCode, VtoStage } from '@/lib/vto/contracts';
@@ -480,134 +481,72 @@ export default function App() {
     };
   }, [processSyncQueue, syncQueue.length]);
 
-  /**
-   * `getSession()` can be briefly stale during refresh/navigation; use `getUser()` as the
-   * authoritative source for "who is signed in" before deciding to clear wardrobe state.
-   */
-  const resolveAuthenticatedUserId = useCallback(async (): Promise<string | null> => {
-    const supabase = createBrowserSupabaseClient();
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-    if (error) {
-      console.error('resolveAuthenticatedUserId:getUser', error);
-      trackAuthHydration('resolve_user_error', {
-        hasError: true,
-        message: error.message,
-      });
-      return null;
-    }
-    trackAuthHydration('resolve_user_ok', { hasUser: Boolean(user) });
-    return user?.id ?? null;
-  }, []);
-
   const hydrateRemoteUser = useCallback(async (userId: string): Promise<boolean> => {
     const supabase = createBrowserSupabaseClient();
-    await supabase.auth.refreshSession().catch(() => {});
-    trackAuthHydration('hydrate_start', {
-      requestedUser: Boolean(userId),
-      hasLocalUserRef: Boolean(wardrobeUserIdRef.current),
-    });
-    const uid = await resolveAuthenticatedUserId();
-    if (!uid || uid !== userId) {
-      console.error('hydrateRemoteUser: no valid session after refresh', {
-        expected: userId,
-        got: uid,
-      });
-      trackAuthHydration('hydrate_rejected', {
-        resolvedUser: Boolean(uid),
-        matchesRequestedUser: uid === userId,
-      });
-      return false;
-    }
-    trackAuthHydration('hydrate_verified', { matchesRequestedUser: true });
-    wardrobeUserIdRef.current = uid;
+    trackAuthHydration('hydrate_start', { requestedUser: Boolean(userId) });
+    wardrobeUserIdRef.current = userId;
 
-    if (savedOutfitsUserIdRef.current !== null && savedOutfitsUserIdRef.current !== uid) {
+    if (savedOutfitsUserIdRef.current !== null && savedOutfitsUserIdRef.current !== userId) {
       setSavedOutfits([]);
     }
-    savedOutfitsUserIdRef.current = uid;
+    savedOutfitsUserIdRef.current = userId;
 
-    let profile = await fetchProfile(supabase, uid);
-    if (!profile) {
-      await ensureProfileRow(supabase, uid);
-      profile = await fetchProfile(supabase, uid);
-    }
+    // Profile is small and orthogonal to wardrobe sync; load it in parallel.
+    const profilePromise = fetchProfile(supabase, userId).then(async (p) => {
+      if (p) return p;
+      await ensureProfileRow(supabase, userId);
+      return fetchProfile(supabase, userId);
+    });
+
+    // 1. Try the canonical full-sync API (one round-trip, server-bumped timestamp).
+    let canonical = await fetchCanonicalSyncFromApi();
     if (!mountedRef.current) return true;
 
+    // 2. Fall back to direct queries if the API is unreachable.
+    if (!canonical) {
+      trackAuthHydration('canonical_sync_fallback', {});
+      const [wardrobeFallback, outfitsFallback] = await Promise.all([
+        (async () => {
+          const direct = await fetchWardrobe(supabase, userId);
+          if (direct !== null) return direct;
+          return await fetchWardrobeFromApi();
+        })(),
+        fetchSavedOutfits(supabase, userId),
+      ]);
+      if (wardrobeFallback !== null && outfitsFallback !== null) {
+        canonical = {
+          items: wardrobeFallback,
+          outfits: outfitsFallback,
+          lastFullSyncAt: new Date().toISOString(),
+        };
+      }
+    }
+
+    const profile = await profilePromise;
+    if (!mountedRef.current) return true;
     if (profile) {
       setUserName(profile.display_name || 'Alex');
       setHasCompletedOnboarding(profile.onboarding_completed);
-      if (profile.selfie_url) setUserSelfie(profile.selfie_url);
-      else setUserSelfie(null);
+      setUserSelfie(profile.selfie_url ?? null);
     }
 
-    const loadCloudWardrobe = async (): Promise<WardrobeItem[] | null> => {
-      const direct = await fetchWardrobe(supabase, uid);
-      if (direct !== null) return direct;
-      trackAuthHydration('wardrobe_direct_fetch_null_trying_api', {});
-      const viaApi = await fetchWardrobeFromApi();
-      if (viaApi !== null) {
-        trackAuthHydration('wardrobe_loaded_via_api', { count: viaApi.length });
-      }
-      return viaApi;
-    };
-
-    // CLOUD-ONLY WARDROBE LOAD. localStorage is never read or written for wardrobe
-    // items — Supabase is the single, authoritative source. Refresh always fetches
-    // here. If the cloud is unreachable, we keep wardrobeItems at its current value
-    // (the default `[]` on a cold mount, or whatever's already in memory) and a
-    // toast surfaces the failure so the user retries.
-    const cloudItems = await loadCloudWardrobe();
-    if (!mountedRef.current) return true;
-    if (cloudItems !== null) {
-      setWardrobeItems(cloudItems);
-      trackAuthHydration('wardrobe_cloud_loaded', { count: cloudItems.length });
-    } else {
-      console.error('wardrobe cloud load failed (client + /api/wardrobe)');
-      trackAuthHydration('wardrobe_cloud_fetch_failed', {});
-    }
-
-    const localSaved = loadSavedOutfitsForUser(uid);
-    if (localSaved.length > 0) {
-      setSavedOutfits(localSaved);
-    }
-
-    const outfits = await fetchSavedOutfits(supabase, uid);
-    if (!mountedRef.current) return true;
-    if (outfits === null) {
-      console.error('fetchSavedOutfits failed — using local cached saved outfits');
-      if (localSaved.length > 0) {
-        setSavedOutfits(localSaved);
-      }
-    } else {
-      let merged = mergeRemoteAndLocalSavedOutfits(outfits, localSaved);
-      const unsynced = merged.filter((o) => !isPersistedOutfitId(o.id));
-      if (unsynced.length > 0) {
-        const synced: SavedOutfit[] = [];
-        for (const item of unsynced) {
-          const inserted = await insertSavedOutfit(supabase, uid, {
-            tops: item.tops,
-            bottoms: item.bottoms,
-            accessories: item.accessories,
-            savedAt: item.savedAt,
-          });
-          if ('error' in inserted) {
-            console.error('saved outfit local->cloud reconcile failed', inserted.error);
-            synced.push(item);
-          } else {
-            synced.push({ ...item, id: inserted.id });
-          }
-        }
-        const persisted = merged.filter((o) => isPersistedOutfitId(o.id));
-        merged = [...persisted, ...synced].sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime());
-      }
+    if (canonical) {
+      setWardrobeItems(canonical.items);
+      const localSaved = loadSavedOutfitsForUser(userId);
+      const merged = mergeRemoteAndLocalSavedOutfits(canonical.outfits, localSaved);
       setSavedOutfits(merged);
-      persistSavedOutfitsForUser(uid, merged);
+      persistSavedOutfitsForUser(userId, merged);
+      trackAuthHydration('hydrate_ok', {
+        wardrobe: canonical.items.length,
+        outfits: canonical.outfits.length,
+      });
+      return true;
     }
-    return true;
-  }, [resolveAuthenticatedUserId]);
+
+    trackAuthHydration('hydrate_failed', {});
+    showToast('Could not load your wardrobe from the cloud. Try again.', 'error');
+    return false;
+  }, []);
 
   const clearRemoteSessionState = useCallback(() => {
     wardrobeUserIdRef.current = null;
@@ -637,16 +576,16 @@ export default function App() {
   }, []);
 
   const handleAuthDialogSignedIn = useCallback(async () => {
-    const supabase = createBrowserSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
+    // Orchestrator already received the SIGNED_IN event before this callback
+    // fires. We only need to await its bootstrap so hydrate runs against a
+    // verified user id without re-reading getUser() here.
+    const orchestrator = getSessionOrchestrator();
+    const userId = await orchestrator.waitForUserId();
+    if (!userId) return;
     setIsLoggedIn(true);
-    wardrobeUserIdRef.current = user.id;
-    // No local fast-render: wardrobeItems stays at [] until hydrate fetches cloud.
+    wardrobeUserIdRef.current = userId;
     try {
-      const ok = await hydrateRemoteUser(user.id);
+      const ok = await hydrateRemoteUser(userId);
       if (!ok) {
         showToast('Could not verify your account yet. Try again.', 'error');
         return;
@@ -660,139 +599,51 @@ export default function App() {
 
   useEffect(() => {
     if (!SUPABASE_ON) return;
+    const orchestrator = getSessionOrchestrator();
     let cancelled = false;
-    const supabase = createBrowserSupabaseClient();
+    let lastUserId: string | null = null;
 
-    async function readSessionWithRetry(): Promise<Session | null> {
-      await supabase.auth.refreshSession().catch(() => {});
-      const readOnce = async () => (await supabase.auth.getSession()).data.session;
-      let session = await readOnce();
-      if (session?.user) return session;
-      for (let attempt = 0; attempt < 8; attempt++) {
-        await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
-        session = await readOnce();
-        if (session?.user) return session;
-      }
-      return session;
-    }
-
-    async function confirmSignedOut(): Promise<boolean> {
-      // Hard reload can race auth storage hydration; avoid destructive clears until
-      // we repeatedly verify there is truly no authenticated user.
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const uid = await resolveAuthenticatedUserId();
-        if (uid) {
-          trackAuthHydration('signed_out_recheck_found_user', { attempt: attempt + 1 });
-          return false;
-        }
-        await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
-      }
-      trackAuthHydration('signed_out_recheck_confirmed', {});
-      return true;
-    }
-
-    async function bootstrapFromStorage() {
-      const session = await readSessionWithRetry();
-      trackAuthHydration('bootstrap_session_read', {
-        hasSessionUser: Boolean(session?.user),
-      });
+    const handleState = (state: AuthOrchestratorState) => {
       if (cancelled) return;
-      const bootstrapUserId = session?.user?.id ?? (await resolveAuthenticatedUserId());
-      trackAuthHydration('bootstrap_user_resolved', {
-        hasSessionUser: Boolean(session?.user),
-        hasResolvedUser: Boolean(bootstrapUserId),
-      });
+      trackAuthHydration('orchestrator_state', { status: state.status });
 
-      if (bootstrapUserId) {
+      if (state.status === 'authenticated') {
+        const newUserId = state.user.id;
+        const userChanged = lastUserId !== null && lastUserId !== newUserId;
+        lastUserId = newUserId;
+
         setIsLoggedIn(true);
-        wardrobeUserIdRef.current = bootstrapUserId;
-        // No local fast-render: wardrobeItems stays at [] until hydrate fetches cloud.
-        try {
-          const ok = await hydrateRemoteUser(bootstrapUserId);
-          if (!ok && !cancelled) {
-            // Do not wipe state on ambiguous auth reads. SIGNED_OUT will clear state when definitive.
-            console.warn('bootstrapFromStorage: hydrateRemoteUser could not verify user');
-            trackAuthHydration('bootstrap_hydrate_not_verified', {});
-          }
-        } catch (e) {
-          console.error('Supabase bootstrap failed', e);
-          // Keep any already-hydrated local data; avoid wiping wardrobe on transient network/auth failures.
-          trackAuthHydration('bootstrap_hydrate_error', {
-            message: e instanceof Error ? e.message : 'unknown',
-          });
+        if (userChanged) {
+          // Switched account in the same tab — clear UI state derived from the previous user.
+          setSavedOutfits([]);
+          setWardrobeItems([]);
+          setSelectedOutfit({});
         }
-      } else {
-        trackAuthHydration('bootstrap_signed_out_pending_confirm', {});
-        const definitelySignedOut = await confirmSignedOut();
-        if (definitelySignedOut) {
-          trackAuthHydration('bootstrap_signed_out', {});
-          clearRemoteSessionState();
-        } else {
-          trackAuthHydration('bootstrap_signed_out_suppressed', {});
-        }
-      }
-      if (!cancelled) setSupabaseReady(true);
-    }
 
-    void bootstrapFromStorage();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (cancelled) return;
-      trackAuthHydration('auth_state_change', {
-        event,
-        hasSessionUser: Boolean(session?.user),
-      });
-
-      // Storage is loaded via getSession() + retry above. INITIAL_SESSION often races before
-      // cookie storage is readable and would hydrate with no user, wiping data after refresh.
-      if (event === 'INITIAL_SESSION') {
-        return;
-      }
-
-      if (event === 'PASSWORD_RECOVERY') {
-        setShowPasswordRecovery(true);
-        return;
-      }
-
-      if (event === 'SIGNED_IN') {
-        setIsLoggedIn(true);
-        if (session?.user) {
-          try {
-            const ok = await hydrateRemoteUser(session.user.id);
-            if (!ok) {
-              console.warn('SIGNED_IN hydrate could not verify user; preserving local state');
-            }
-          } catch (e) {
-            console.error('SIGNED_IN hydrate failed', e);
-          }
-        }
-        router.refresh();
-        return;
-      }
-
-      if (event === 'SIGNED_OUT') {
-        const definitelySignedOut = await confirmSignedOut();
-        if (!definitelySignedOut) {
-          trackAuthHydration('signed_out_event_suppressed', {});
-          const uid = await resolveAuthenticatedUserId();
-          if (uid) {
-            setIsLoggedIn(true);
-            void hydrateRemoteUser(uid);
-          }
-          return;
-        }
+        // Hydrate (idempotent + cheap when state already matches).
+        void hydrateRemoteUser(newUserId).catch((err) => {
+          console.error('orchestrator hydrate failed', err);
+        });
+      } else if (state.status === 'signed_out') {
+        lastUserId = null;
         clearRemoteSessionState();
-        router.refresh();
+      } else if (state.status === 'unconfigured') {
+        clearRemoteSessionState();
       }
-    });
+
+      if (!cancelled && state.status !== 'idle' && state.status !== 'bootstrapping') {
+        setSupabaseReady(true);
+      }
+    };
+
+    const unsubscribe = orchestrator.subscribe(handleState);
+    void orchestrator.bootstrap();
 
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      unsubscribe();
     };
-  }, [hydrateRemoteUser, router, clearRemoteSessionState, resolveAuthenticatedUserId]);
+  }, [hydrateRemoteUser, clearRemoteSessionState]);
 
   useEffect(() => {
     if (!SUPABASE_ON || !supabaseReady) return;
@@ -920,25 +771,14 @@ export default function App() {
       return;
     }
 
-    // Optimistic teardown — honor the user's intent immediately. If we waited
-    // for signOut(), a hung network call (default 'global' scope hits the
-    // server) would leave the UI stuck logged in with no feedback. Local state
-    // first, network call second.
+    // Optimistic teardown via the orchestrator (single source of truth) so a
+    // hung server signOut never leaves the UI stuck signed in.
     clearRemoteSessionState();
-
     try {
-      const supabase = createBrowserSupabaseClient();
-      // 'local' scope clears cookies/storage with no server round-trip — fast,
-      // deterministic, can't hang. The refresh token expires server-side on its
-      // own TTL.
-      const { error } = await supabase.auth.signOut({ scope: 'local' });
-      if (error) {
-        console.error('Supabase signOut error (local already cleared)', error);
-      }
+      await getSessionOrchestrator().signOut();
     } catch (e) {
-      console.error('Supabase signOut threw (local already cleared)', e);
+      console.error('orchestrator signOut threw', e);
     }
-
     router.refresh();
   };
 

@@ -8,7 +8,9 @@
     "dev:turbo": "next dev --port 3000 --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -85,6 +87,7 @@
     "eslint": "^9.39.1",
     "eslint-config-next": "^16.0.1",
     "tailwindcss": "4.1.12",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
   }
 }

@@ -16,6 +16,29 @@ import { Eye, EyeOff } from 'lucide-react';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { getAuthEmailRedirectUrl } from '@/lib/site-url';
 import { updateProfile } from '@/lib/supabase/sync';
+import { getSessionOrchestrator } from '@/lib/auth/session-orchestrator';
+
+/** Map raw Supabase auth errors to user-friendly messages without leaking server detail. */
+function classifyAuthError(message: string | undefined): string {
+  if (!message) return 'Could not complete that action. Please try again.';
+  const m = message.toLowerCase();
+  if (m.includes('invalid login') || m.includes('invalid_credentials')) {
+    return 'Email or password is incorrect.';
+  }
+  if (m.includes('email not confirmed')) {
+    return 'Please confirm your email before signing in. Check your inbox for the link.';
+  }
+  if (m.includes('rate limit') || m.includes('too many requests')) {
+    return 'Too many attempts. Wait a moment and try again.';
+  }
+  if (m.includes('network') || m.includes('failed to fetch')) {
+    return 'Network issue. Check your connection and try again.';
+  }
+  if (m.includes('user already registered') || m.includes('already exists')) {
+    return 'An account already exists for that email. Try signing in or resetting your password.';
+  }
+  return message;
+}
 
 type Mode = 'signin' | 'signup' | 'forgot';
 
@@ -61,11 +84,12 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
         password,
       });
       if (error) {
-        setFormError(error.message);
+        setFormError(classifyAuthError(error.message));
         return;
       }
-      // Close immediately — do not chain extra auth reads here, they can lag while
-      // auth state has already transitioned to signed-in.
+      // Notify the orchestrator so app state updates immediately without waiting
+      // for the auth state event subscription to fire.
+      void getSessionOrchestrator().refreshAfterCredentialSignIn();
       onOpenChange(false);
       setPassword('');
       void Promise.resolve(onSignedIn?.()).catch((err) => {
@@ -74,9 +98,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
     } catch (err) {
       console.error('signInWithPassword threw', err);
       setFormError(
-        err instanceof Error && err.message
-          ? err.message
-          : 'Could not sign in. Check your connection and try again.'
+        classifyAuthError(err instanceof Error ? err.message : undefined)
       );
     } finally {
       setBusy(false);
@@ -103,13 +125,14 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
         },
       });
       if (error) {
-        setFormError(error.message);
+        setFormError(classifyAuthError(error.message));
         return;
       }
       if (data.session?.user) {
         if (name) {
           await updateProfile(supabase, data.session.user.id, { display_name: name });
         }
+        void getSessionOrchestrator().refreshAfterCredentialSignIn();
         onOpenChange(false);
         setPassword('');
         setDisplayName('');
@@ -125,9 +148,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
     } catch (err) {
       console.error('signUp threw', err);
       setFormError(
-        err instanceof Error && err.message
-          ? err.message
-          : 'Could not create account. Check your connection and try again.'
+        classifyAuthError(err instanceof Error ? err.message : undefined)
       );
     } finally {
       setBusy(false);
@@ -149,16 +170,14 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
         redirectTo: getAuthEmailRedirectUrl(),
       });
       if (error) {
-        setFormError(error.message);
+        setFormError(classifyAuthError(error.message));
         return;
       }
       setInfoMessage('If an account exists for that email, you will receive a reset link shortly.');
     } catch (err) {
       console.error('resetPasswordForEmail threw', err);
       setFormError(
-        err instanceof Error && err.message
-          ? err.message
-          : 'Could not send reset link. Check your connection and try again.'
+        classifyAuthError(err instanceof Error ? err.message : undefined)
       );
     } finally {
       setBusy(false);

@@ -1,28 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { deleteSavedOutfit } from '@/lib/supabase/sync';
+import { z } from 'zod';
+import { requireAuth } from '@/app/api/_helpers/auth';
+import { softDeleteSavedOutfit } from '@/lib/supabase/sync/mutations';
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function DELETE(_request: NextRequest, { params }: Params) {
-  try {
-    const { id } = await params;
-    const supabase = await createServerSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const ok = await deleteSavedOutfit(supabase, user.id, decodeURIComponent(id));
-    if (!ok) {
-      return NextResponse.json({ error: 'Could not delete favorite' }, { status: 500 });
-    }
-    return NextResponse.json({ ok: true });
-  } catch (error) {
+const deleteSchema = z.object({
+  clientMutationId: z.string().min(1).max(120).optional(),
+});
+
+export async function DELETE(request: NextRequest, { params }: Params) {
+  const ctx = await requireAuth();
+  if (ctx instanceof NextResponse) return ctx;
+
+  const { id } = await params;
+  const decoded = decodeURIComponent(id);
+
+  let mutationId: string | undefined;
+  if (request.headers.get('content-length')) {
+    const parsed = deleteSchema.safeParse(await request.json().catch(() => ({})));
+    if (parsed.success) mutationId = parsed.data.clientMutationId;
+  }
+
+  const result = await softDeleteSavedOutfit(ctx.supabase, ctx.userId, decoded, mutationId);
+  if (!result.ok) {
     return NextResponse.json(
-      { error: 'Favorites delete failed', details: error instanceof Error ? error.message : String(error) },
+      { error: { code: result.error.code, message: result.error.message } },
       { status: 500 }
     );
   }
+  return NextResponse.json({ ok: true });
 }
