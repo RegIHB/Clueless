@@ -31,6 +31,7 @@ import {
   ensureProfileRow,
   updateProfile,
 } from '@/lib/supabase/sync';
+import { fetchWardrobeFromApi } from '@/lib/wardrobe-api';
 import type { Session } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
 import type { CreateTryOnJobResponse, TryOnJobSnapshot, VtoErrorCode, VtoStage } from '@/lib/vto/contracts';
@@ -386,6 +387,7 @@ export default function App() {
       if (current.kind === 'wardrobe_create') {
         const res = await fetch('/api/wardrobe', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(current.payload),
         });
@@ -397,6 +399,7 @@ export default function App() {
       } else if (current.kind === 'wardrobe_delete') {
         const res = await fetch(`/api/wardrobe/${encodeURIComponent(current.payload.code)}`, {
           method: 'DELETE',
+          credentials: 'include',
         });
         ok = res.ok;
         if (!ok) {
@@ -406,6 +409,7 @@ export default function App() {
       } else if (current.kind === 'favorite_create') {
         const res = await fetch('/api/favorites', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tops: current.payload.tops,
@@ -421,6 +425,7 @@ export default function App() {
       } else if (current.kind === 'favorite_delete') {
         const res = await fetch(`/api/favorites/${encodeURIComponent(current.payload.id)}`, {
           method: 'DELETE',
+          credentials: 'include',
         });
         ok = res.ok;
         if (!ok) {
@@ -540,13 +545,24 @@ export default function App() {
       else setUserSelfie(null);
     }
 
+    const loadCloudWardrobe = async (): Promise<WardrobeItem[] | null> => {
+      const direct = await fetchWardrobe(supabase, uid);
+      if (direct !== null) return direct;
+      trackAuthHydration('wardrobe_direct_fetch_null_trying_api', {});
+      const viaApi = await fetchWardrobeFromApi();
+      if (viaApi !== null) {
+        trackAuthHydration('wardrobe_loaded_via_api', { count: viaApi.length });
+      }
+      return viaApi;
+    };
+
     // Local-first wardrobe (same idea as Clueless). Distinguish "never saved" vs "user cleared closet".
     const localState = getWardrobeStorageState(uid);
     if (localState.kind === 'items') {
       setWardrobeItems(localState.items);
       trackAuthHydration('wardrobe_local_items', { count: localState.items.length });
       // Reconcile local-first edits with cloud so logout/login doesn't "lose" recent changes.
-      const cloudItems = await fetchWardrobe(supabase, uid);
+      const cloudItems = await loadCloudWardrobe();
       if (!mountedRef.current) return true;
       if (cloudItems && cloudItems.length >= 0) {
         const cloudCodes = new Set(cloudItems.map((i) => i.code));
@@ -561,7 +577,7 @@ export default function App() {
           if ('error' in insertResult) {
             console.error('wardrobe local->cloud reconcile failed', insertResult.error);
           } else {
-            const fresh = await fetchWardrobe(supabase, uid);
+            const fresh = await loadCloudWardrobe();
             if (fresh) {
               setWardrobeItems(fresh);
               storage.setWardrobe(uid, fresh);
@@ -578,21 +594,22 @@ export default function App() {
         }
       }
     } else if (localState.kind === 'empty') {
-      setWardrobeItems([]);
       trackAuthHydration('wardrobe_local_empty', {});
-      // Recovery path: if local storage was accidentally wiped but cloud has items, restore from cloud.
-      const cloudItems = await fetchWardrobe(supabase, uid);
+      // Recovery path: local [] may be stale; fetch cloud before showing an empty closet.
+      const cloudItems = await loadCloudWardrobe();
       if (!mountedRef.current) return true;
       if (cloudItems && cloudItems.length > 0) {
         setWardrobeItems(cloudItems);
         storage.setWardrobe(uid, cloudItems);
         trackAuthHydration('wardrobe_cloud_recovered', { count: cloudItems.length });
+      } else {
+        setWardrobeItems([]);
       }
     } else {
-      const items = await fetchWardrobe(supabase, uid);
+      const items = await loadCloudWardrobe();
       if (!mountedRef.current) return true;
       if (items === null) {
-        console.error('fetchWardrobe failed — wardrobe not updated');
+        console.error('wardrobe cloud load failed (client + /api/wardrobe)');
         trackAuthHydration('wardrobe_cloud_fetch_failed', {});
       } else {
         setWardrobeItems(items);
@@ -680,9 +697,8 @@ export default function App() {
     const wState = getWardrobeStorageState(user.id);
     if (wState.kind === 'items') {
       setWardrobeItems(wState.items);
-    } else if (wState.kind === 'empty') {
-      setWardrobeItems([]);
     }
+    // `empty` / `none`: do not clear here — hydrate loads cloud first so saved rows stay visible.
     try {
       const ok = await hydrateRemoteUser(user.id);
       if (!ok) {
@@ -726,8 +742,6 @@ export default function App() {
         const wState = getWardrobeStorageState(session.user.id);
         if (wState.kind === 'items') {
           setWardrobeItems(wState.items);
-        } else if (wState.kind === 'empty') {
-          setWardrobeItems([]);
         }
         try {
           const ok = await hydrateRemoteUser(session.user.id);
@@ -881,7 +895,7 @@ export default function App() {
       savedOutfitsUserIdRef.current = user.id;
       const cached = loadSavedOutfitsForUser(user.id);
       if (cached.length > 0) setSavedOutfits(cached);
-      const response = await fetch('/api/favorites', { cache: 'no-store' });
+      const response = await fetch('/api/favorites', { cache: 'no-store', credentials: 'include' });
       const payload = (await response.json().catch(() => ({}))) as {
         favorites?: SavedOutfit[];
         error?: string;
@@ -1120,6 +1134,7 @@ export default function App() {
         savedOutfitsUserIdRef.current = user.id;
         const response = await fetch('/api/favorites', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tops: selectedOutfit.tops,
@@ -1202,6 +1217,7 @@ export default function App() {
       try {
         const response = await fetch(`/api/favorites/${encodeURIComponent(outfit.id)}`, {
           method: 'DELETE',
+          credentials: 'include',
         });
         if (!response.ok) {
           const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -1234,6 +1250,7 @@ export default function App() {
       try {
         const response = await fetch(`/api/wardrobe/${encodeURIComponent(item.code)}`, {
           method: 'DELETE',
+          credentials: 'include',
         });
         if (!response.ok) {
           const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -1297,11 +1314,7 @@ export default function App() {
     setWardrobeItems((prev) => {
       const next = [...prev, newItem];
       const sortOrder = next.length - 1;
-      const uidSync = wardrobeUserIdRef.current;
       if (SUPABASE_ON) {
-        if (uidSync) {
-          storage.setWardrobe(uidSync, next);
-        }
         void (async () => {
           try {
             const supabase = createBrowserSupabaseClient();
@@ -1312,8 +1325,11 @@ export default function App() {
               showToast(`${item.type} saved on this device. Sign in to sync to cloud.`, 'error');
               return;
             }
+            wardrobeUserIdRef.current = user.id;
+            storage.setWardrobe(user.id, next);
             const response = await fetch('/api/wardrobe', {
               method: 'POST',
+              credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 ...newItem,
@@ -1337,6 +1353,14 @@ export default function App() {
                 'error'
               );
               return;
+            }
+            const listRes = await fetch('/api/wardrobe', { credentials: 'include' });
+            if (listRes.ok) {
+              const body = (await listRes.json()) as { items?: WardrobeItem[] };
+              if (Array.isArray(body.items)) {
+                setWardrobeItems(body.items);
+                storage.setWardrobe(user.id, body.items);
+              }
             }
             showToast(`${item.type} added to wardrobe!`);
           } catch (e) {
@@ -1391,7 +1415,10 @@ export default function App() {
         return;
       }
 
-      const cloud = await fetchWardrobe(supabase, user.id);
+      let cloud = await fetchWardrobe(supabase, user.id);
+      if (cloud === null) {
+        cloud = await fetchWardrobeFromApi();
+      }
       if (cloud === null) {
         showToast('Could not load wardrobe from the cloud. Check your connection and try again.', 'error');
         return;
@@ -1414,7 +1441,10 @@ export default function App() {
         return;
       }
 
-      const fresh = await fetchWardrobe(supabase, user.id);
+      let fresh = await fetchWardrobe(supabase, user.id);
+      if (fresh === null) {
+        fresh = await fetchWardrobeFromApi();
+      }
       if (fresh) {
         setWardrobeItems(fresh);
         storage.setWardrobe(user.id, fresh);

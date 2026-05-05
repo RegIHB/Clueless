@@ -4,14 +4,20 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { countWardrobeItems, fetchWardrobe, insertWardrobeItem } from '@/lib/supabase/sync';
 import type { WardrobeCategory } from '@/types/wardrobe';
 
+/** Product CDNs often use protocol-relative or odd URLs; strict .url() rejects valid client payloads. */
+const optionalUrlish = z.preprocess(
+  (v) => (v === '' || v === null || v === undefined ? undefined : String(v).trim() || undefined),
+  z.string().max(8000).optional()
+);
+
 const createWardrobeSchema = z.object({
   code: z.string().min(1),
   type: z.string().min(1),
   category: z.enum(['tops', 'bottoms', 'accessories']),
-  imageUrl: z.string().url().optional(),
-  title: z.string().optional(),
-  sourceUrl: z.string().url().optional(),
-  attribution: z.string().optional(),
+  imageUrl: optionalUrlish,
+  title: z.string().max(500).optional(),
+  sourceUrl: optionalUrlish,
+  attribution: z.string().max(500).optional(),
   sortOrder: z.number().int().min(0).optional(),
 });
 
@@ -53,7 +59,8 @@ export async function POST(request: Request) {
     }
 
     const payload = parsed.data;
-    const sortOrder = payload.sortOrder ?? (await countWardrobeItems(supabase, user.id));
+    const counted = await countWardrobeItems(supabase, user.id);
+    const sortOrder = payload.sortOrder ?? (counted >= 0 ? counted : 0);
     const result = await insertWardrobeItem(
       supabase,
       user.id,
