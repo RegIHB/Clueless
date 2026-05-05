@@ -209,6 +209,16 @@ export default function App() {
     setHasCompletedOnboarding(false);
     setShowOnboarding(false);
     setCurrentView('wardrobe');
+    setCurrentPage(0);
+    setShowChat(false);
+    setShowUpload(false);
+    setShowSelfieUpload(false);
+    setIsGeneratingTryOn(false);
+    setTryOnImageUrl(null);
+    setSavedOutfitsLoading(false);
+    setDeletingOutfitId(null);
+    setDeletingItemCode(null);
+    setDebugFillLoading(false);
   }, []);
 
   const handleAuthDialogSignedIn = useCallback(async () => {
@@ -399,27 +409,33 @@ export default function App() {
   const handleSignUpCTA = () => openAuth('signup');
 
   const handleLogout = async () => {
-    setSelectedOutfit({});
     if (!SUPABASE_ON) {
+      setSelectedOutfit({});
       setIsLoggedIn(false);
       setLocation('Berlin');
       setWeather({ temp: 12, condition: 'Cloudy' });
       return;
     }
+
+    // Optimistic teardown — honor the user's intent immediately. If we waited
+    // for signOut(), a hung network call (default 'global' scope hits the
+    // server) would leave the UI stuck logged in with no feedback. Local state
+    // first, network call second.
+    clearRemoteSessionState();
+
     try {
       const supabase = createBrowserSupabaseClient();
-      const { error } = await supabase.auth.signOut();
+      // 'local' scope clears cookies/storage with no server round-trip — fast,
+      // deterministic, can't hang. The refresh token expires server-side on its
+      // own TTL.
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
       if (error) {
-        console.error('Supabase signOut failed', error);
-        showToast('Could not sign out. Try again.', 'error');
-        return;
+        console.error('Supabase signOut error (local already cleared)', error);
       }
     } catch (e) {
-      console.error('Supabase signOut failed', e);
-      showToast('Could not sign out. Try again.', 'error');
-      return;
+      console.error('Supabase signOut threw (local already cleared)', e);
     }
-    clearRemoteSessionState();
+
     router.refresh();
   };
 

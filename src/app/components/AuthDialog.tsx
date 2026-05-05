@@ -75,6 +75,13 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
           console.error('onSignedIn failed', err);
         });
       }
+    } catch (err) {
+      console.error('signInWithPassword threw', err);
+      setFormError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not sign in. Check your connection and try again.'
+      );
     } finally {
       setBusy(false);
     }
@@ -119,6 +126,13 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
         'Check your email for a confirmation link. After confirming, sign in here.'
       );
       setPassword('');
+    } catch (err) {
+      console.error('signUp threw', err);
+      setFormError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not create account. Check your connection and try again.'
+      );
     } finally {
       setBusy(false);
     }
@@ -143,6 +157,13 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
         return;
       }
       setInfoMessage('If an account exists for that email, you will receive a reset link shortly.');
+    } catch (err) {
+      console.error('resetPasswordForEmail threw', err);
+      setFormError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not send reset link. Check your connection and try again.'
+      );
     } finally {
       setBusy(false);
     }
