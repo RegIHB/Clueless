@@ -119,20 +119,20 @@ function toVtoCategory(item: WardrobeItem): 'upper_body' | 'lower_body' | 'dress
 
 function resolveTryOnGarments(
   selectedOutfit: { tops?: WardrobeItem; bottoms?: WardrobeItem; accessories?: WardrobeItem },
-  selectedCategory: WardrobeCategory
+  _selectedCategory: WardrobeCategory
 ): WardrobeItem[] {
-  const ordered: WardrobeItem[] = [];
-  const categoryFirst =
-    selectedCategory === 'tops'
-      ? selectedOutfit.tops
-      : selectedCategory === 'bottoms'
-        ? selectedOutfit.bottoms
-        : selectedOutfit.accessories;
-  if (categoryFirst) ordered.push(categoryFirst);
-  const rest = [selectedOutfit.tops, selectedOutfit.bottoms, selectedOutfit.accessories].filter(
-    (item): item is WardrobeItem => !!item && item.code !== categoryFirst?.code
+  // Apply base garments first, then accessories last so they are not overwritten
+  // by later generation passes.
+  return [selectedOutfit.tops, selectedOutfit.bottoms, selectedOutfit.accessories].filter(
+    (item): item is WardrobeItem => !!item
   );
-  return [...ordered, ...rest];
+}
+
+function buildTryOnPrompt(item: WardrobeItem): string {
+  if (item.category === 'accessories') {
+    return `Add the ${item.type} accessory clearly and naturally. Preserve previously applied clothing fit and texture.`;
+  }
+  return `Virtual try-on with ${item.type}. Preserve previously applied garments and overall realism.`;
 }
 
 function loadLocalSavedOutfits(): SavedOutfit[] {
@@ -1414,7 +1414,7 @@ export default function App() {
           garments: garmentsForRequest.map(({ item, imageUrl }) => ({
             imageUrl,
             category: toVtoCategory(item),
-            prompt: `Virtual try-on with ${item.type}`,
+            prompt: buildTryOnPrompt(item),
             code: item.code,
           })),
           crop: true,
