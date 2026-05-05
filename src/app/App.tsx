@@ -174,6 +174,13 @@ export default function App() {
       setWardrobeItems(localState.items);
     } else if (localState.kind === 'empty') {
       setWardrobeItems([]);
+      // Recovery path: if local storage was accidentally wiped but cloud has items, restore from cloud.
+      const cloudItems = await fetchWardrobe(supabase, uid);
+      if (!mountedRef.current) return true;
+      if (cloudItems && cloudItems.length > 0) {
+        setWardrobeItems(cloudItems);
+        storage.setWardrobe(uid, cloudItems);
+      }
     } else {
       const items = await fetchWardrobe(supabase, uid);
       if (!mountedRef.current) return true;
@@ -245,8 +252,7 @@ export default function App() {
       }
     } catch (e) {
       console.error('Post sign-in sync failed', e);
-      setWardrobeItems([]);
-      setSavedOutfits([]);
+      showToast('Could not sync your wardrobe right now. Keeping local data.', 'error');
     }
     router.refresh();
   }, [hydrateRemoteUser, router, clearRemoteSessionState]);
@@ -286,10 +292,7 @@ export default function App() {
           if (!ok && !cancelled) clearRemoteSessionState();
         } catch (e) {
           console.error('Supabase bootstrap failed', e);
-          if (!cancelled) {
-            setWardrobeItems([]);
-            setSavedOutfits([]);
-          }
+          // Keep any already-hydrated local data; avoid wiping wardrobe on transient network/auth failures.
         }
       } else {
         clearRemoteSessionState();
