@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast as sonnerToast } from 'sonner';
 import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw, Bug } from 'lucide-react';
 import Image from 'next/image';
 import { ClothingIcon } from './components/ClothingIcon';
@@ -96,7 +97,6 @@ export default function App() {
   const [userSelfie, setUserSelfie] = useState<string | null>(null);
   const [location, setLocation] = useState('Berlin');
   const [weather, setWeather] = useState({ temp: 12, condition: 'Cloudy' });
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [savedOutfits, setSavedOutfits] = useState<SavedOutfit[]>(() =>
     SUPABASE_ON ? [] : loadLocalSavedOutfits()
   );
@@ -115,8 +115,8 @@ export default function App() {
   const [debugFillLoading, setDebugFillLoading] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    if (type === 'error') sonnerToast.error(message);
+    else sonnerToast.success(message);
   };
 
   const mountedRef = useRef(true);
@@ -1495,14 +1495,16 @@ export default function App() {
             </p>
           </motion.div>
 
-          {/* Wardrobe Builder */}
+          {/* Wardrobe Builder ↔ Saved Outfits — smooth crossfade between the two views. */}
+          <AnimatePresence mode="wait" initial={false}>
           {currentView === 'wardrobe' && (
             <motion.div
+              key="view-wardrobe"
               id="wardrobe-panel"
-              initial={false}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, delay: 0.2 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               className="mb-16"
             >
               <div
@@ -1946,9 +1948,11 @@ export default function App() {
           {/* Saved Outfits View */}
           {currentView === 'outfits' && (
             <motion.div
-              initial={false}
+              key="view-outfits"
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               className="mb-16"
             >
               <div className="max-w-[1200px] mx-auto p-8 md:p-12 rounded-3xl" style={{
@@ -2126,6 +2130,7 @@ export default function App() {
               </div>
             </motion.div>
           )}
+          </AnimatePresence>
 
           {/* Feature Cards */}
           <div className="grid md:grid-cols-3 gap-6">
@@ -2148,10 +2153,10 @@ export default function App() {
             ].map((feature, idx) => (
               <motion.div
                 key={idx}
-                initial={false}
+                initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: idx * 0.1 }}
+                viewport={{ once: true, margin: '-12%' }}
+                transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1], delay: idx * 0.08 }}
                 whileHover={{ y: -4 }}
                 className="p-6 rounded-2xl"
                 style={{
@@ -2181,10 +2186,10 @@ export default function App() {
           <div className="grid md:grid-cols-2 gap-8">
             {/* Left Column */}
             <motion.div
-              initial={false}
+              initial={{ opacity: 0, x: -16 }}
               whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
+              viewport={{ once: true, margin: '-12%' }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               className="space-y-6"
             >
               <div className="p-8 rounded-3xl" style={{
@@ -2217,10 +2222,10 @@ export default function App() {
 
             {/* Right Column */}
             <motion.div
-              initial={false}
+              initial={{ opacity: 0, x: 16 }}
               whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, delay: 0.2 }}
+              viewport={{ once: true, margin: '-12%' }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: 0.08 }}
               className="space-y-6"
             >
               <div className="p-8 rounded-3xl" style={{
@@ -2279,10 +2284,10 @@ export default function App() {
         <section className="px-6 md:px-12 lg:px-20 py-24">
           <div className="max-w-[1400px] mx-auto">
             <motion.div
-              initial={false}
+              initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
+              viewport={{ once: true, margin: '-12%' }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
               className="p-10 md:p-16 rounded-3xl text-center"
               style={{
                 background: 'rgba(255, 255, 255, 0.7)',
@@ -2321,10 +2326,10 @@ export default function App() {
                 ].map((stat, idx) => (
                   <motion.div
                     key={stat.label}
-                    initial={false}
+                    initial={{ opacity: 0, scale: 0.92 }}
                     whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.5, delay: idx * 0.1 }}
+                    viewport={{ once: true, margin: '-10%' }}
+                    transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1], delay: idx * 0.06 }}
                     className="p-6 rounded-2xl"
                     style={{
                       background: '#FFE5C8',
@@ -2349,10 +2354,10 @@ export default function App() {
       {/* Testimonial */}
       <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-24' : 'py-20 md:py-28'}`}>
         <motion.div
-          initial={false}
+          initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
+          viewport={{ once: true, margin: '-12%' }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className={`max-w-[1000px] mx-auto text-center rounded-3xl ${isLoggedIn ? 'p-12 md:p-16' : 'p-10 md:p-14'}`}
           style={{
             background: '#000',
@@ -2397,10 +2402,10 @@ export default function App() {
       {/* Final CTA */}
       <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-32' : 'py-24 md:py-36'}`}>
         <motion.div
-          initial={false}
+          initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
+          viewport={{ once: true, margin: '-12%' }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className="max-w-[900px] mx-auto text-center"
         >
           <h2 className={`text-balance ${isLoggedIn ? 'mb-8' : 'mb-6 md:mb-8'}`} style={{
@@ -2577,30 +2582,6 @@ export default function App() {
             weather={weather}
             wardrobeItems={wardrobeItems}
           />
-        )}
-      </AnimatePresence>
-
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={false}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            className="fixed left-1/2 -translate-x-1/2 z-[220] px-4 sm:px-6 py-3 sm:py-4 rounded-full flex items-center justify-center gap-3 shadow-[0_10px_40px_rgba(0,0,0,0.22)] transition-[opacity,transform] duration-300 ease-out max-w-[min(calc(100vw-2rem),24rem)] bottom-24 sm:bottom-8"
-            style={{
-              background: toast.type === 'success' ? '#000' : '#dc2626',
-              color: '#fff',
-              border: '2px solid #000',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)'
-            }}
-            role="status"
-          >
-            {toast.type === 'success' && <Check className="w-5 h-5 shrink-0" strokeWidth={2.5} />}
-            <span className="text-center break-words text-balance" style={{ fontSize: '14px', fontWeight: 700 }}>
-              {toast.message}
-            </span>
-          </motion.div>
         )}
       </AnimatePresence>
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { motion } from 'motion/react';
-import { Camera, Search, Upload, X, Check, Loader2 } from 'lucide-react';
+import { Camera, Search, Upload, X, Check } from 'lucide-react';
+import { Skeleton } from './ui/skeleton';
 
 type PickedProduct = {
   id: string;
@@ -294,15 +295,29 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 </p>
               )}
 
-              <div className="min-h-[200px]">
+              <div className="min-h-[200px]" aria-live="polite" aria-busy={pickerLoading}>
                 {pickerLoading && (
-                  <div className="flex items-center justify-center gap-2 py-16 text-gray-600">
-                    <Loader2 className="w-6 h-6 animate-spin" strokeWidth={2} />
-                    <span style={{ fontSize: '14px', fontWeight: 600 }}>Searching…</span>
-                  </div>
+                  <>
+                    <span className="sr-only">Searching…</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="rounded-2xl overflow-hidden"
+                          style={{ border: '3px solid #000', boxShadow: '4px 4px 0 #000', background: '#fafafa' }}
+                        >
+                          <Skeleton className="aspect-square w-full rounded-none" />
+                          <div className="p-2 space-y-1.5">
+                            <Skeleton className="h-3 w-[90%]" />
+                            <Skeleton className="h-3 w-[60%]" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
                 {!pickerLoading && pickerError && (
-                  <p className="text-center py-12" style={{ fontSize: '14px', fontWeight: 600, color: '#b91c1c' }}>
+                  <p className="text-center py-12" role="alert" style={{ fontSize: '14px', fontWeight: 600, color: '#b91c1c' }}>
                     {pickerError}
                   </p>
                 )}

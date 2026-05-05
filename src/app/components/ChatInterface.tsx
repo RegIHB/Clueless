@@ -248,6 +248,9 @@ export function ChatInterface({ onClose, location, weather, wardrobeItems }: Cha
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="flex justify-start"
+                role="status"
+                aria-live="polite"
+                aria-label="Stylist is thinking"
               >
                 <div className="p-4 rounded-2xl" style={{ background: '#FFE5C8', border: '2px solid #000' }}>
                   <div className="flex items-center gap-2">
