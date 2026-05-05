@@ -151,6 +151,24 @@ export async function insertWardrobeItem(
   return { ok: true };
 }
 
+export async function deleteWardrobeItem(
+  supabase: SupabaseClient,
+  userId: string,
+  code: string
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('wardrobe_items')
+    .delete()
+    .eq('user_id', userId)
+    .eq('code', code);
+
+  if (error) {
+    console.error('deleteWardrobeItem', error);
+    return false;
+  }
+  return true;
+}
+
 /** Batch insert for dev tools; `startSortOrder` should match existing row count. */
 export async function bulkInsertWardrobeItems(
   supabase: SupabaseClient,
