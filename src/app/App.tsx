@@ -730,6 +730,21 @@ export default function App() {
       return session;
     }
 
+    async function confirmSignedOut(): Promise<boolean> {
+      // Hard reload can race auth storage hydration; avoid destructive clears until
+      // we repeatedly verify there is truly no authenticated user.
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const uid = await resolveAuthenticatedUserId();
+        if (uid) {
+          trackAuthHydration('signed_out_recheck_found_user', { attempt: attempt + 1 });
+          return false;
+        }
+        await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
+      }
+      trackAuthHydration('signed_out_recheck_confirmed', {});
+      return true;
+    }
+
     async function bootstrapFromStorage() {
       const session = await readSessionWithRetry();
       trackAuthHydration('bootstrap_session_read', {
@@ -764,8 +779,14 @@ export default function App() {
           });
         }
       } else {
-        trackAuthHydration('bootstrap_signed_out', {});
-        clearRemoteSessionState();
+        trackAuthHydration('bootstrap_signed_out_pending_confirm', {});
+        const definitelySignedOut = await confirmSignedOut();
+        if (definitelySignedOut) {
+          trackAuthHydration('bootstrap_signed_out', {});
+          clearRemoteSessionState();
+        } else {
+          trackAuthHydration('bootstrap_signed_out_suppressed', {});
+        }
       }
       if (!cancelled) setSupabaseReady(true);
     }
@@ -809,6 +830,16 @@ export default function App() {
       }
 
       if (event === 'SIGNED_OUT') {
+        const definitelySignedOut = await confirmSignedOut();
+        if (!definitelySignedOut) {
+          trackAuthHydration('signed_out_event_suppressed', {});
+          const uid = await resolveAuthenticatedUserId();
+          if (uid) {
+            setIsLoggedIn(true);
+            void hydrateRemoteUser(uid);
+          }
+          return;
+        }
         clearRemoteSessionState();
         router.refresh();
       }
