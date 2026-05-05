@@ -272,6 +272,7 @@ export default function App() {
   const [vtoJobId, setVtoJobId] = useState<string | null>(null);
   const [vtoError, setVtoError] = useState<{ code?: VtoErrorCode; message: string } | null>(null);
   const [tryOnHistory, setTryOnHistory] = useState<TryOnHistoryEntry[]>(loadTryOnHistory);
+  const [tryOnPreviewUrl, setTryOnPreviewUrl] = useState<string | null>(null);
   const baseModelImg = 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1200&q=80';
   const itemsPerPage = 8;
   const [userName, setUserName] = useState('Alex');
@@ -1205,6 +1206,15 @@ export default function App() {
     if (typeof window === 'undefined') return;
     localStorage.setItem(LOCAL_TRYON_HISTORY_KEY, JSON.stringify(tryOnHistory.slice(0, MAX_TRYON_HISTORY)));
   }, [tryOnHistory]);
+
+  useEffect(() => {
+    if (!tryOnPreviewUrl) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setTryOnPreviewUrl(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [tryOnPreviewUrl]);
 
   useEffect(() => {
     if (isGeneratingTryOn || tryOnImageUrl) return;
@@ -2755,7 +2765,10 @@ export default function App() {
                           <button
                             key={entry.id}
                             type="button"
-                            onClick={() => setTryOnImageUrl(entry.imageUrl)}
+                            onClick={() => {
+                              setTryOnImageUrl(entry.imageUrl);
+                              setTryOnPreviewUrl(entry.imageUrl);
+                            }}
                             className="relative aspect-[3/4] overflow-hidden rounded-lg border-2 border-black hover:opacity-90 active:opacity-80"
                             title={`Open try-on ${new Date(entry.createdAt).toLocaleString()}`}
                           >
@@ -3415,6 +3428,48 @@ export default function App() {
             weather={weather}
             wardrobeItems={wardrobeItems}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {tryOnPreviewUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            className="fixed inset-0 z-[90] bg-black/70 p-4 md:p-8"
+            onClick={() => setTryOnPreviewUrl(null)}
+          >
+            <div className="mx-auto flex h-full w-full max-w-[980px] items-center justify-center">
+              <motion.div
+                initial={{ scale: 0.96, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.98, opacity: 0 }}
+                transition={{ duration: 0.16 }}
+                className="relative h-full max-h-[92vh] w-full overflow-hidden rounded-2xl border-[3px] border-black bg-white shadow-[10px_10px_0_#000]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => setTryOnPreviewUrl(null)}
+                  className="absolute right-3 top-3 z-10 h-9 w-9 rounded-full border-2 border-black bg-white text-xl font-bold leading-none hover:opacity-80"
+                  aria-label="Close try-on preview"
+                >
+                  ×
+                </button>
+                <div className="relative h-full w-full">
+                  <Image
+                    src={tryOnPreviewUrl}
+                    alt="Try-on preview"
+                    fill
+                    unoptimized
+                    className="object-contain"
+                  />
+                </div>
+              </motion.div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
