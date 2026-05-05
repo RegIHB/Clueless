@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast as sonnerToast } from 'sonner';
-import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw, Bug, Trash2, RotateCcw, Download, AlertTriangle } from 'lucide-react';
+import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw, Trash2, RotateCcw, Download, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import { ClothingIcon } from './components/ClothingIcon';
 import { ClothingSticker } from './components/ClothingSticker';
@@ -16,9 +16,7 @@ import { SelfieUpload } from './components/SelfieUpload';
 import { AuthDialog } from './components/AuthDialog';
 import { ResetPasswordDialog } from './components/ResetPasswordDialog';
 import { getGarmentImage } from '@/lib/garment-images';
-// Wardrobe persistence is cloud-only. localStorage is intentionally NOT used as
-// a wardrobe cache — every refresh fetches authoritative state from Supabase.
-import { WARDROBE_TEST_ITEMS, wardrobeSeedToItem } from '@/lib/wardrobe-test-data';
+import { getWardrobeStorageState, storage } from '@/lib/storage';
 import {
   createBrowserSupabaseClient,
   isSupabaseConfigured,
@@ -340,7 +338,6 @@ export default function App() {
   const [supabaseReady, setSupabaseReady] = useState(!SUPABASE_ON);
 
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
-  const [debugFillLoading, setDebugFillLoading] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     if (type === 'error') sonnerToast.error(message);
@@ -635,7 +632,6 @@ export default function App() {
     setSavedOutfitsLoading(false);
     setDeletingOutfitId(null);
     setDeletingItemCode(null);
-    setDebugFillLoading(false);
     setSyncQueue([]);
     setIsSyncProcessing(false);
   }, []);
@@ -1332,77 +1328,6 @@ export default function App() {
     })();
   };
 
-  const handleDebugFillWardrobe = useCallback(async () => {
-    const prev = wardrobeItems;
-    const existingLocal = new Set(prev.map((i) => i.code));
-    const additionsLocal = WARDROBE_TEST_ITEMS.filter((s) => !existingLocal.has(s.code)).map(
-      wardrobeSeedToItem
-    );
-
-    if (!SUPABASE_ON) {
-      if (additionsLocal.length === 0) {
-        showToast('All debug seed items are already in your wardrobe');
-        return;
-      }
-      setWardrobeItems([...prev, ...additionsLocal]);
-      showToast(`Added ${additionsLocal.length} debug wardrobe items`);
-      return;
-    }
-
-    setDebugFillLoading(true);
-    try {
-      const supabase = createBrowserSupabaseClient();
-      await supabase.auth.refreshSession();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        showToast('Sign in to save debug items to your wardrobe', 'error');
-        return;
-      }
-
-      let cloud = await fetchWardrobe(supabase, user.id);
-      if (cloud === null) {
-        cloud = await fetchWardrobeFromApi();
-      }
-      if (cloud === null) {
-        showToast('Could not load wardrobe from the cloud. Check your connection and try again.', 'error');
-        return;
-      }
-
-      const cloudCodes = new Set(cloud.map((i) => i.code));
-      const toInsert = WARDROBE_TEST_ITEMS.filter((s) => !cloudCodes.has(s.code)).map(wardrobeSeedToItem);
-      const startSortOrder = cloud.length;
-
-      if (toInsert.length === 0) {
-        setWardrobeItems(cloud);
-        showToast('Your cloud wardrobe already includes all seed items.');
-        return;
-      }
-
-      const result = await bulkInsertWardrobeItems(supabase, user.id, toInsert, startSortOrder);
-      if ('error' in result) {
-        showToast(`Cloud sync failed: ${result.error}`, 'error');
-        return;
-      }
-
-      let fresh = await fetchWardrobe(supabase, user.id);
-      if (fresh === null) {
-        fresh = await fetchWardrobeFromApi();
-      }
-      if (fresh) {
-        setWardrobeItems(fresh);
-      } else {
-        setWardrobeItems([...prev, ...toInsert]);
-      }
-      showToast(`Added ${toInsert.length} items to your cloud wardrobe`);
-    } catch (e) {
-      console.warn('Debug wardrobe fill sync failed', e);
-      showToast('Cloud sync failed. Try again.', 'error');
-    } finally {
-      setDebugFillLoading(false);
-    }
-  }, [wardrobeItems]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -3539,31 +3464,6 @@ export default function App() {
             initial={false}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.9, type: 'spring', damping: 20 }}
-            whileHover={{ scale: debugFillLoading ? 1 : 1.08 }}
-            whileTap={{ scale: debugFillLoading ? 1 : 0.95 }}
-            onClick={() => void handleDebugFillWardrobe()}
-            disabled={debugFillLoading}
-            className="fixed bottom-8 left-6 z-[60] w-12 h-12 rounded-full flex items-center justify-center shadow-[0_8px_28px_rgba(0,0,0,0.18)] transition-shadow duration-200 ease-out disabled:opacity-60"
-            style={{
-              background: '#f59e0b',
-              color: '#000',
-              border: '2px solid #000',
-            }}
-            type="button"
-            title="Testing: add sample wardrobe items (10+ per category)"
-            aria-label="Fill wardrobe with sample items for testing"
-          >
-            {debugFillLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2.5} aria-hidden />
-            ) : (
-              <Bug className="w-5 h-5" strokeWidth={2.5} aria-hidden />
-            )}
-          </motion.button>
-
-          <motion.button
-            initial={false}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 1, type: 'spring', damping: 20 }}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             onClick={() => setShowChat(true)}
