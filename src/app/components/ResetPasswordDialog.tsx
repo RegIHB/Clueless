@@ -84,7 +84,11 @@ export function ResetPasswordDialog({
       open={open}
       onOpenChange={(next) => {
         if (!next && !closedAfterSuccess.current) {
-          void createBrowserSupabaseClient().auth.signOut();
+          // 'local' scope clears the recovery session synchronously without a
+          // network round-trip — matches the main logout flow and avoids hangs.
+          void createBrowserSupabaseClient()
+            .auth.signOut({ scope: 'local' })
+            .catch((err) => console.error('Recovery signOut failed', err));
         }
         onOpenChange(next);
         if (!next) {
