@@ -632,7 +632,6 @@ export default function App() {
     setSavedOutfitsLoading(false);
     setDeletingOutfitId(null);
     setDeletingItemCode(null);
-    setDebugFillLoading(false);
     setSyncQueue([]);
     setIsSyncProcessing(false);
   }, []);
