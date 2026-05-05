@@ -561,72 +561,44 @@ export default function App() {
       return viaApi;
     };
 
-    // Local-first wardrobe (same idea as Clueless). Distinguish "never saved" vs "user cleared closet".
+    // CLOUD-FIRST WARDROBE LOAD.
+    // Cloud is the single source of truth for what the user's wardrobe is.
+    // localStorage is only a first-paint hint (set in bootstrap before this runs)
+    // and a fallback when cloud is unreachable. We never trust local state to
+    // override what cloud authoritatively returns — that's how the previous
+    // local-first reconcile could lose data on refresh.
+    const cloudItems = await loadCloudWardrobe();
+    if (!mountedRef.current) return true;
     const localState = getWardrobeStorageState(uid);
-    if (localState.kind === 'items') {
-      setWardrobeItems(localState.items);
-      trackAuthHydration('wardrobe_local_items', { count: localState.items.length });
-      // Reconcile local-first edits with cloud so logout/login doesn't "lose" recent changes.
-      const cloudItems = await loadCloudWardrobe();
-      if (!mountedRef.current) return true;
-      if (cloudItems && cloudItems.length >= 0) {
-        const cloudCodes = new Set(cloudItems.map((i) => i.code));
-        const missingInCloud = localState.items.filter((i) => !cloudCodes.has(i.code));
-        if (missingInCloud.length > 0) {
-          const insertResult = await bulkInsertWardrobeItems(
-            supabase,
-            uid,
-            missingInCloud,
-            cloudItems.length
-          );
-          if ('error' in insertResult) {
-            console.error('wardrobe local->cloud reconcile failed', insertResult.error);
-          } else {
-            const fresh = await loadCloudWardrobe();
-            if (fresh) {
-              setWardrobeItems(fresh);
-              storage.setWardrobe(uid, fresh);
-              trackAuthHydration('wardrobe_cloud_reconciled', { count: fresh.length });
-            }
-          }
-        } else {
-          const merged = [...cloudItems];
-          for (const localItem of localState.items) {
-            if (!merged.some((i) => i.code === localItem.code)) merged.push(localItem);
-          }
-          setWardrobeItems(merged);
-          storage.setWardrobe(uid, merged);
-        }
-      }
-    } else if (localState.kind === 'empty') {
-      trackAuthHydration('wardrobe_local_empty', {});
-      // Recovery path: local [] may be stale; fetch cloud before showing an empty closet.
-      const cloudItems = await loadCloudWardrobe();
-      if (!mountedRef.current) return true;
-      if (cloudItems === null) {
-        // Ambiguous (RLS / network failure). Don't wipe in-memory state — leave
-        // wardrobeItems as-is so a transient cloud failure can't lock the user
-        // into an empty wardrobe.
-        trackAuthHydration('wardrobe_cloud_fetch_failed_keep_local', {});
-      } else if (cloudItems.length > 0) {
-        setWardrobeItems(cloudItems);
-        storage.setWardrobe(uid, cloudItems);
-        trackAuthHydration('wardrobe_cloud_recovered', { count: cloudItems.length });
-      } else {
-        // Cloud confirmed empty.
-        setWardrobeItems([]);
-      }
+
+    if (cloudItems !== null) {
+      // Cloud responded definitively. Preserve any local-only items that may be
+      // queued for sync (e.g. a recent add whose POST is still pending), so a
+      // refresh during in-flight writes never erases the user's edits.
+      const cloudCodes = new Set(cloudItems.map((i) => i.code));
+      const localOnly =
+        localState.kind === 'items'
+          ? localState.items.filter((i) => !cloudCodes.has(i.code))
+          : [];
+      const next = localOnly.length > 0 ? [...cloudItems, ...localOnly] : cloudItems;
+      setWardrobeItems(next);
+      storage.setWardrobe(uid, next);
+      trackAuthHydration('wardrobe_cloud_loaded', {
+        cloudCount: cloudItems.length,
+        localOnlyCount: localOnly.length,
+      });
     } else {
-      const items = await loadCloudWardrobe();
-      if (!mountedRef.current) return true;
-      if (items === null) {
-        console.error('wardrobe cloud load failed (client + /api/wardrobe)');
-        trackAuthHydration('wardrobe_cloud_fetch_failed', {});
-      } else {
-        setWardrobeItems(items);
-        storage.setWardrobe(uid, items);
-        trackAuthHydration('wardrobe_cloud_loaded', { count: items.length });
+      // Cloud unreachable (network / RLS / transient). Fall back to local cache
+      // — never wipe what the user already had on this device.
+      trackAuthHydration('wardrobe_cloud_fetch_failed_keep_local', {
+        localKind: localState.kind,
+      });
+      if (localState.kind === 'items') {
+        setWardrobeItems(localState.items);
       }
+      // 'empty' / 'none': leave wardrobeItems at its current value (the bootstrap
+      // fast-render or default []). A transient cloud failure must not be a
+      // destructive signal.
     }
 
     const localSaved = loadSavedOutfitsForUser(uid);
@@ -1417,14 +1389,10 @@ export default function App() {
               );
               return;
             }
-            const listRes = await fetch('/api/wardrobe', { credentials: 'include' });
-            if (listRes.ok) {
-              const body = (await listRes.json()) as { items?: WardrobeItem[] };
-              if (Array.isArray(body.items)) {
-                setWardrobeItems(body.items);
-                storage.setWardrobe(user.id, body.items);
-              }
-            }
+            // Cloud insert succeeded. Trust the optimistic state — do NOT refetch
+            // and replace wardrobeItems/storage with a GET response. A read-after-write
+            // race or transient empty response would wipe both in-memory state AND
+            // localStorage, deleting the item the user just added.
             showToast(`${item.type} added to wardrobe!`);
           } catch (e) {
             enqueueSync({
