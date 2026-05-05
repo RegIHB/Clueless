@@ -13,23 +13,23 @@ export function OnboardingFlow({ onComplete, userName }: OnboardingFlowProps) {
   const steps = [
     {
       title: `Welcome, ${userName}!`,
-      subtitle: 'Let\'s set up your digital wardrobe',
-      description: 'Clueless helps you create outfits from clothes you already own.',
-      action: 'Get Started',
+      subtitle: 'Let\'s tame your closet chaos',
+      description: 'Clueless turns your existing clothes into actually wearable outfit plans.',
+      action: 'Let\'s go',
       icon: <Sparkles className="w-12 h-12" strokeWidth={1.5} />
     },
     {
-      title: 'Add Your Clothes',
-      subtitle: 'Build your wardrobe catalog',
-      description: 'Take photos or upload images of your clothing items. We\'ll organize everything for you.',
-      action: 'I Understand',
+      title: 'Add your pieces',
+      subtitle: 'Build your digital closet',
+      description: 'Snap or upload your items once. Future-you will thank present-you every morning.',
+      action: 'Got it',
       icon: <Camera className="w-12 h-12" strokeWidth={1.5} />
     },
     {
-      title: 'Get AI Recommendations',
-      subtitle: 'Smart outfit suggestions',
-      description: 'Tell us your plans and we\'ll suggest perfect outfits based on weather, occasion, and your style.',
-      action: 'Start Using Clueless',
+      title: 'Get AI outfit picks',
+      subtitle: 'Less guessing, more serving',
+      description: 'Tell us the plan, we factor weather + vibe, and you get looks that make sense.',
+      action: 'Start serving looks',
       icon: <Check className="w-12 h-12" strokeWidth={1.5} />
     }
   ];
@@ -171,7 +171,7 @@ export function OnboardingFlow({ onComplete, userName }: OnboardingFlowProps) {
             opacity: 0.6
           }}
         >
-          Skip onboarding
+          I&apos;ll freestyle this
         </button>
       </motion.div>
     </motion.div>
