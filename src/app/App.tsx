@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast as sonnerToast } from 'sonner';
-import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw, Bug, Trash2 } from 'lucide-react';
+import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw, Bug, Trash2, RotateCcw, Download, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import { ClothingIcon } from './components/ClothingIcon';
 import { ClothingSticker } from './components/ClothingSticker';
@@ -36,6 +36,8 @@ import {
 } from '@/lib/supabase/sync';
 import type { Session } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
+import type { CreateTryOnJobResponse, TryOnJobSnapshot, VtoErrorCode, VtoStage } from '@/lib/vto/contracts';
+import { vtoCopy } from '@/lib/vto/copy';
 
 const SUPABASE_ON = isSupabaseConfigured();
 const AUTH_HYDRATION_TELEMETRY =
@@ -43,6 +45,95 @@ const AUTH_HYDRATION_TELEMETRY =
   process.env.NEXT_PUBLIC_AUTH_HYDRATION_TELEMETRY === '1';
 
 const LOCAL_SAVED_OUTFITS_KEY = 'clueless_saved_outfits_v1';
+const LOCAL_SAVED_OUTFITS_USER_PREFIX = 'clueless_saved_outfits_user_v1';
+const LOCAL_TRYON_HISTORY_KEY = 'clueless_tryon_history_v1';
+const LOCAL_SELECTED_OUTFIT_KEY = 'clueless_selected_outfit_v1';
+const MAX_TRYON_HISTORY = 12;
+
+type TryOnHistoryEntry = {
+  id: string;
+  createdAt: string;
+  imageUrl: string;
+  personImageUrl: string;
+  garmentImageUrl: string;
+  garmentCode?: string;
+};
+
+const VTO_STAGE_LABELS: Record<VtoStage, string> = {
+  upload: 'Upload',
+  validation: 'Validation',
+  processing: 'Processing',
+  generating: 'Generating',
+  final: 'Final Result',
+};
+
+function loadTryOnHistory(): TryOnHistoryEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_TRYON_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as TryOnHistoryEntry[];
+    return Array.isArray(parsed) ? parsed.slice(0, MAX_TRYON_HISTORY) : [];
+  } catch {
+    return [];
+  }
+}
+
+function inferTryOnErrorHint(code?: VtoErrorCode): string {
+  switch (code) {
+    case 'INVALID_IMAGE':
+      return 'Use a clear, full-body photo with good lighting and a visible garment image.';
+    case 'NETWORK':
+      return 'Check your connection and retry. We keep your last inputs.';
+    case 'BILLING':
+      return 'Add Replicate credit / billing, then retry.';
+    case 'PROVIDER':
+      return 'Provider issue detected. Retry in a moment.';
+    case 'TIMEOUT':
+      return 'The generation timed out. Retry or reduce image size.';
+    default:
+      return 'Retry now or upload a different photo.';
+  }
+}
+
+function resolvePrimaryTryOnGarment(
+  selectedOutfit: { tops?: WardrobeItem; bottoms?: WardrobeItem; accessories?: WardrobeItem },
+  selectedCategory: WardrobeCategory
+): WardrobeItem | null {
+  const categoryPick =
+    selectedCategory === 'tops'
+      ? selectedOutfit.tops
+      : selectedCategory === 'bottoms'
+        ? selectedOutfit.bottoms
+        : selectedOutfit.accessories;
+  if (categoryPick) return categoryPick;
+  return selectedOutfit.tops ?? selectedOutfit.bottoms ?? selectedOutfit.accessories ?? null;
+}
+
+function toVtoCategory(item: WardrobeItem): 'upper_body' | 'lower_body' | 'dresses' {
+  const isDress = /\bdress\b/i.test(item.type);
+  if (item.category === 'tops') return isDress ? 'dresses' : 'upper_body';
+  if (item.category === 'bottoms') return 'lower_body';
+  return 'upper_body';
+}
+
+function resolveTryOnGarments(
+  selectedOutfit: { tops?: WardrobeItem; bottoms?: WardrobeItem; accessories?: WardrobeItem },
+  selectedCategory: WardrobeCategory
+): WardrobeItem[] {
+  const ordered: WardrobeItem[] = [];
+  const categoryFirst =
+    selectedCategory === 'tops'
+      ? selectedOutfit.tops
+      : selectedCategory === 'bottoms'
+        ? selectedOutfit.bottoms
+        : selectedOutfit.accessories;
+  if (categoryFirst) ordered.push(categoryFirst);
+  const rest = [selectedOutfit.tops, selectedOutfit.bottoms, selectedOutfit.accessories].filter(
+    (item): item is WardrobeItem => !!item && item.code !== categoryFirst?.code
+  );
+  return [...ordered, ...rest];
+}
 
 function loadLocalSavedOutfits(): SavedOutfit[] {
   if (typeof window === 'undefined') return [];
@@ -58,6 +149,65 @@ function loadLocalSavedOutfits(): SavedOutfit[] {
   } catch {
     return [];
   }
+}
+
+function savedOutfitsUserKey(userId: string): string {
+  return `${LOCAL_SAVED_OUTFITS_USER_PREFIX}:${userId}`;
+}
+
+function normalizeSavedOutfits(value: unknown): SavedOutfit[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((row) => row && typeof row === 'object')
+    .map((row) => {
+      const r = row as Partial<SavedOutfit> & { savedAt?: unknown };
+      return {
+        id: String(r.id ?? ''),
+        tops: r.tops,
+        bottoms: r.bottoms,
+        accessories: r.accessories,
+        savedAt:
+          r.savedAt instanceof Date
+            ? r.savedAt
+            : new Date(typeof r.savedAt === 'string' || typeof r.savedAt === 'number' ? r.savedAt : Date.now()),
+      } as SavedOutfit;
+    })
+    .filter((o) => o.id.length > 0 && !Number.isNaN(o.savedAt.getTime()));
+}
+
+function loadSavedOutfitsForUser(userId: string | null): SavedOutfit[] {
+  if (!userId || typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(savedOutfitsUserKey(userId));
+    if (!raw) return [];
+    return normalizeSavedOutfits(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+function persistSavedOutfitsForUser(userId: string | null, outfits: SavedOutfit[]): void {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(
+      savedOutfitsUserKey(userId),
+      JSON.stringify(outfits.map((o) => ({ ...o, savedAt: o.savedAt.toISOString() })))
+    );
+  } catch {
+    // ignore quota/storage issues
+  }
+}
+
+function mergeRemoteAndLocalSavedOutfits(remote: SavedOutfit[], local: SavedOutfit[]): SavedOutfit[] {
+  if (local.length === 0) return remote;
+  const merged = [...remote];
+  const knownIds = new Set(remote.map((o) => o.id));
+  for (const item of local) {
+    if (knownIds.has(item.id)) continue;
+    // Keep local unsynced entries so user never "loses" a saved outfit due transient cloud issues.
+    if (!isPersistedOutfitId(item.id)) merged.push(item);
+  }
+  return merged.sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime());
 }
 
 function isPersistedOutfitId(id: string): boolean {
@@ -116,6 +266,12 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState(0);
   const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
   const [tryOnImageUrl, setTryOnImageUrl] = useState<string | null>(null);
+  const [vtoStage, setVtoStage] = useState<VtoStage>('upload');
+  const [vtoProgress, setVtoProgress] = useState(0);
+  const [vtoStatusMessage, setVtoStatusMessage] = useState('Upload your photo to begin');
+  const [vtoJobId, setVtoJobId] = useState<string | null>(null);
+  const [vtoError, setVtoError] = useState<{ code?: VtoErrorCode; message: string } | null>(null);
+  const [tryOnHistory, setTryOnHistory] = useState<TryOnHistoryEntry[]>(loadTryOnHistory);
   const baseModelImg = 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1200&q=80';
   const itemsPerPage = 8;
   const [userName, setUserName] = useState('Alex');
@@ -209,6 +365,38 @@ export default function App() {
     if (localState.kind === 'items') {
       setWardrobeItems(localState.items);
       trackAuthHydration('wardrobe_local_items', { count: localState.items.length });
+      // Reconcile local-first edits with cloud so logout/login doesn't "lose" recent changes.
+      const cloudItems = await fetchWardrobe(supabase, uid);
+      if (!mountedRef.current) return true;
+      if (cloudItems && cloudItems.length >= 0) {
+        const cloudCodes = new Set(cloudItems.map((i) => i.code));
+        const missingInCloud = localState.items.filter((i) => !cloudCodes.has(i.code));
+        if (missingInCloud.length > 0) {
+          const insertResult = await bulkInsertWardrobeItems(
+            supabase,
+            uid,
+            missingInCloud,
+            cloudItems.length
+          );
+          if ('error' in insertResult) {
+            console.error('wardrobe local->cloud reconcile failed', insertResult.error);
+          } else {
+            const fresh = await fetchWardrobe(supabase, uid);
+            if (fresh) {
+              setWardrobeItems(fresh);
+              storage.setWardrobe(uid, fresh);
+              trackAuthHydration('wardrobe_cloud_reconciled', { count: fresh.length });
+            }
+          }
+        } else {
+          const merged = [...cloudItems];
+          for (const localItem of localState.items) {
+            if (!merged.some((i) => i.code === localItem.code)) merged.push(localItem);
+          }
+          setWardrobeItems(merged);
+          storage.setWardrobe(uid, merged);
+        }
+      }
     } else if (localState.kind === 'empty') {
       setWardrobeItems([]);
       trackAuthHydration('wardrobe_local_empty', {});
@@ -233,12 +421,42 @@ export default function App() {
       }
     }
 
+    const localSaved = loadSavedOutfitsForUser(uid);
+    if (localSaved.length > 0) {
+      setSavedOutfits(localSaved);
+    }
+
     const outfits = await fetchSavedOutfits(supabase, uid);
     if (!mountedRef.current) return true;
     if (outfits === null) {
-      console.error('fetchSavedOutfits failed — saved outfits not updated');
+      console.error('fetchSavedOutfits failed — using local cached saved outfits');
+      if (localSaved.length > 0) {
+        setSavedOutfits(localSaved);
+      }
     } else {
-      setSavedOutfits(outfits);
+      let merged = mergeRemoteAndLocalSavedOutfits(outfits, localSaved);
+      const unsynced = merged.filter((o) => !isPersistedOutfitId(o.id));
+      if (unsynced.length > 0) {
+        const synced: SavedOutfit[] = [];
+        for (const item of unsynced) {
+          const inserted = await insertSavedOutfit(supabase, uid, {
+            tops: item.tops,
+            bottoms: item.bottoms,
+            accessories: item.accessories,
+            savedAt: item.savedAt,
+          });
+          if ('error' in inserted) {
+            console.error('saved outfit local->cloud reconcile failed', inserted.error);
+            synced.push(item);
+          } else {
+            synced.push({ ...item, id: inserted.id });
+          }
+        }
+        const persisted = merged.filter((o) => isPersistedOutfitId(o.id));
+        merged = [...persisted, ...synced].sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime());
+      }
+      setSavedOutfits(merged);
+      persistSavedOutfitsForUser(uid, merged);
     }
     return true;
   }, [resolveAuthenticatedUserId]);
@@ -410,9 +628,13 @@ export default function App() {
   }, [supabaseReady]);
 
   useEffect(() => {
-    if (SUPABASE_ON) return;
     try {
-      localStorage.setItem(LOCAL_SAVED_OUTFITS_KEY, JSON.stringify(savedOutfits));
+      if (!SUPABASE_ON) {
+        localStorage.setItem(LOCAL_SAVED_OUTFITS_KEY, JSON.stringify(savedOutfits));
+        return;
+      }
+      const uid = savedOutfitsUserIdRef.current ?? wardrobeUserIdRef.current;
+      persistSavedOutfitsForUser(uid, savedOutfits);
     } catch (e) {
       console.error('Could not persist saved outfits locally', e);
     }
@@ -425,6 +647,39 @@ export default function App() {
     storage.setWardrobe(uid, wardrobeItems);
   }, [wardrobeItems, isLoggedIn, supabaseReady]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const out = {
+      tops: selectedOutfit.tops?.code,
+      bottoms: selectedOutfit.bottoms?.code,
+      accessories: selectedOutfit.accessories?.code,
+    };
+    localStorage.setItem(LOCAL_SELECTED_OUTFIT_KEY, JSON.stringify(out));
+  }, [selectedOutfit]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || wardrobeItems.length === 0) return;
+    try {
+      const raw = localStorage.getItem(LOCAL_SELECTED_OUTFIT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        tops?: string;
+        bottoms?: string;
+        accessories?: string;
+      };
+      const byCode = new Map(wardrobeItems.map((i) => [i.code, i]));
+      setSelectedOutfit((prev) => ({
+        tops: parsed.tops ? byCode.get(parsed.tops) : prev.tops,
+        bottoms: parsed.bottoms ? byCode.get(parsed.bottoms) : prev.bottoms,
+        accessories: parsed.accessories ? byCode.get(parsed.accessories) : prev.accessories,
+      }));
+    } catch {
+      // ignore corrupt local storage
+    }
+    // only re-hydrate when wardrobe list changes fundamentally
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wardrobeItems.length]);
+
   const refreshSavedOutfits = async () => {
     if (!SUPABASE_ON || !isLoggedIn) return;
     setSavedOutfitsLoading(true);
@@ -433,13 +688,26 @@ export default function App() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        const uid = savedOutfitsUserIdRef.current;
+        if (uid) {
+          const cached = loadSavedOutfitsForUser(uid);
+          if (cached.length > 0) setSavedOutfits(cached);
+        }
+        return;
+      }
+      savedOutfitsUserIdRef.current = user.id;
+      const cached = loadSavedOutfitsForUser(user.id);
+      if (cached.length > 0) setSavedOutfits(cached);
       const list = await fetchSavedOutfits(supabase, user.id);
       if (list === null) {
         showToast('Could not load saved outfits. Check your connection and try again.', 'error');
+        if (cached.length > 0) setSavedOutfits(cached);
         return;
       }
-      setSavedOutfits(list);
+      const merged = mergeRemoteAndLocalSavedOutfits(list, cached);
+      setSavedOutfits(merged);
+      persistSavedOutfitsForUser(user.id, merged);
     } catch (e) {
       console.error('refreshSavedOutfits', e);
       showToast('Could not refresh saved outfits', 'error');
@@ -631,48 +899,81 @@ export default function App() {
     }
 
     const savedAt = new Date();
-    let id: string;
+    const tempId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? `local-${crypto.randomUUID()}`
+        : `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const optimisticOutfit: SavedOutfit = {
+      id: tempId,
+      tops: selectedOutfit.tops,
+      bottoms: selectedOutfit.bottoms,
+      accessories: selectedOutfit.accessories,
+      savedAt,
+    };
+    setSavedOutfits((prev) => [optimisticOutfit, ...prev.filter((o) => o.id !== tempId)]);
 
-    if (SUPABASE_ON) {
-      try {
-        const supabase = createBrowserSupabaseClient();
-        await supabase.auth.refreshSession();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session?.user) {
-          showToast('Sign in to save outfits', 'error');
-          return;
-        }
-        const inserted = await insertSavedOutfit(supabase, session.user.id, {
+    if (!SUPABASE_ON) {
+      showToast('Outfit saved successfully!');
+      return;
+    }
+
+    let cloudSaveFailed = false;
+    let persistedId: string | null = null;
+    let userIdForCache: string | null = savedOutfitsUserIdRef.current ?? wardrobeUserIdRef.current;
+
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        cloudSaveFailed = true;
+      } else {
+        userIdForCache = user.id;
+        savedOutfitsUserIdRef.current = user.id;
+        const inserted = await insertSavedOutfit(supabase, user.id, {
           tops: selectedOutfit.tops,
           bottoms: selectedOutfit.bottoms,
           accessories: selectedOutfit.accessories,
           savedAt,
         });
         if ('error' in inserted) {
-          showToast(`Could not save outfit: ${inserted.error}`, 'error');
-          return;
+          console.warn('insertSavedOutfit failed; keeping local copy', inserted.error);
+          cloudSaveFailed = true;
+        } else {
+          persistedId = inserted.id;
         }
-        id = inserted.id;
-      } catch (e) {
-        console.error('Failed to save outfit remotely', e);
-        showToast('Could not save outfit — try again', 'error');
-        return;
       }
-    } else {
-      id = `${Date.now()}`;
+    } catch (e) {
+      console.error('Failed to save outfit remotely; keeping local copy', e);
+      cloudSaveFailed = true;
     }
 
-    const newOutfit: SavedOutfit = {
-      id,
-      tops: selectedOutfit.tops,
-      bottoms: selectedOutfit.bottoms,
-      accessories: selectedOutfit.accessories,
-      savedAt,
-    };
-    setSavedOutfits((prev) => [newOutfit, ...prev]);
-    showToast('Outfit saved successfully!');
+    if (persistedId) {
+      setSavedOutfits((prev) =>
+        prev.map((o) =>
+          o.id === tempId
+            ? {
+                ...o,
+                id: persistedId,
+              }
+            : o
+        )
+      );
+      showToast('Outfit saved successfully!');
+      // Pull canonical server list to close any consistency gaps.
+      void refreshSavedOutfits();
+    } else if (cloudSaveFailed) {
+      // Keep optimistic local row; user still sees immediate result.
+      if (userIdForCache) {
+        const current = loadSavedOutfitsForUser(userIdForCache);
+        const next = [optimisticOutfit, ...current.filter((o) => o.id !== optimisticOutfit.id)];
+        persistSavedOutfitsForUser(userIdForCache, next);
+      }
+      showToast('Outfit saved on this device. Cloud sync is unavailable right now.', 'error');
+    } else {
+      showToast('Outfit saved successfully!');
+    }
   };
 
   const handleApplySavedOutfit = (outfit: SavedOutfit) => {
@@ -791,35 +1092,20 @@ export default function App() {
       if (SUPABASE_ON) {
         if (uidSync) {
           storage.setWardrobe(uidSync, next);
-        } else {
-          void createBrowserSupabaseClient()
-            .auth.getSession()
-            .then(({ data: { session } }) => {
-              const u = session?.user?.id;
-              if (u) storage.setWardrobe(u, next);
-            });
         }
         void (async () => {
           try {
             const supabase = createBrowserSupabaseClient();
-            await supabase.auth.refreshSession();
             const {
-              data: { session },
-            } = await supabase.auth.getSession();
-            if (!session?.user) {
-              showToast('Sign in to save items to your wardrobe.', 'error');
-              setWardrobeItems((p) => p.filter((i) => i.code !== newItem.code));
-              if (wardrobeUserIdRef.current) {
-                storage.setWardrobe(
-                  wardrobeUserIdRef.current,
-                  next.filter((i) => i.code !== newItem.code)
-                );
-              }
+              data: { user },
+            } = await supabase.auth.getUser();
+            if (!user) {
+              showToast(`${item.type} saved on this device. Sign in to sync to cloud.`, 'error');
               return;
             }
             const result = await insertWardrobeItem(
               supabase,
-              session.user.id,
+              user.id,
               newItem,
               sortOrder
             );
@@ -915,64 +1201,244 @@ export default function App() {
     }
   }, [wardrobeItems]);
 
-  const handleTryOn = async () => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(LOCAL_TRYON_HISTORY_KEY, JSON.stringify(tryOnHistory.slice(0, MAX_TRYON_HISTORY)));
+  }, [tryOnHistory]);
+
+  useEffect(() => {
+    if (isGeneratingTryOn || tryOnImageUrl) return;
     if (!userSelfie) {
+      setVtoStage('upload');
+      setVtoStatusMessage(vtoCopy.idleUpload);
+      setVtoProgress(0);
+      return;
+    }
+    setVtoStage('validation');
+    setVtoStatusMessage(vtoCopy.idlePick);
+    setVtoProgress(5);
+  }, [userSelfie, tryOnImageUrl, isGeneratingTryOn]);
+
+  const applyVtoSnapshot = useCallback(
+    (snapshot: TryOnJobSnapshot) => {
+      setVtoJobId(snapshot.jobId);
+      setVtoProgress(snapshot.progress);
+      setVtoStage(snapshot.stage);
+      setVtoStatusMessage(snapshot.statusMessage);
+      setIsGeneratingTryOn(snapshot.status === 'queued' || snapshot.status === 'processing');
+      if (snapshot.status === 'completed' && snapshot.imageUrl) {
+        setTryOnImageUrl(snapshot.imageUrl);
+        setVtoError(null);
+        const selectedGarment = resolvePrimaryTryOnGarment(selectedOutfit, selectedCategory);
+        const garmentImageUrl = selectedGarment?.imageUrl ?? (selectedGarment ? getGarmentImage(selectedGarment.type) : '');
+        const entry: TryOnHistoryEntry = {
+          id: snapshot.jobId,
+          createdAt: new Date().toISOString(),
+          imageUrl: snapshot.imageUrl,
+          personImageUrl: userSelfie ?? '',
+          garmentImageUrl,
+          garmentCode: selectedGarment?.code,
+        };
+        setTryOnHistory((prev) => [entry, ...prev.filter((i) => i.id !== entry.id)].slice(0, MAX_TRYON_HISTORY));
+        showToast('Try-on generated');
+      }
+      if (snapshot.status === 'failed') {
+        setVtoError({
+          code: snapshot.errorCode,
+          message: snapshot.errorMessage || 'Try-on failed',
+        });
+        showToast(snapshot.errorMessage || 'Try-on failed', 'error');
+      }
+    },
+    [selectedCategory, selectedOutfit, showToast, userSelfie]
+  );
+
+  const validateImageBeforeTryOn = useCallback(async (imageUrl: string, kind: 'person' | 'garment') => {
+    if (!imageUrl) return `${kind === 'person' ? 'Selfie' : 'Garment image'} is required.`;
+    const allowed = /^https?:\/\/|^data:image\/(png|jpeg|jpg|webp);base64,/i.test(imageUrl);
+    if (!allowed) return 'Unsupported image format. Use JPEG, PNG, or WEBP.';
+
+    if (typeof window === 'undefined') return null;
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new window.Image();
+      el.crossOrigin = 'anonymous';
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Image failed to load'));
+      el.src = imageUrl;
+    }).catch(() => null);
+    // Non-blocking fallback: some valid remote URLs fail browser-side preload due CORS/hotlinking,
+    // but still work for server-side generation. Let backend be the final authority in that case.
+    if (!img) return null;
+    if (kind === 'person') {
+      if (img.width < 512 || img.height < 512) return 'Upload a clearer full-body photo (at least 512x512).';
+      const ratio = img.width / img.height;
+      if (ratio > 1.1 || ratio < 0.35) return 'Use a portrait-style full-body selfie (not ultra-wide or heavily cropped).';
+      try {
+        const canvas = document.createElement('canvas');
+        const targetW = 32;
+        const targetH = Math.max(32, Math.round((img.height / img.width) * targetW));
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          const pixels = ctx.getImageData(0, 0, targetW, targetH).data;
+          let luminance = 0;
+          for (let i = 0; i < pixels.length; i += 4) {
+            luminance += 0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
+          }
+          const avg = luminance / (pixels.length / 4);
+          if (avg < 45) return 'Lighting looks too dark. Try a brighter photo for better results.';
+        }
+      } catch {
+        // Ignore canvas/CORS issues for external images.
+      }
+    } else if (img.width < 256 || img.height < 256) {
+      return 'Garment image is too small. Choose a higher resolution product photo.';
+    }
+    return null;
+  }, []);
+
+  const watchTryOnJob = useCallback(
+    async (jobId: string) => {
+      let done = false;
+      let eventSource: EventSource | null = null;
+
+      const poll = async () => {
+        if (done) return;
+        try {
+          const res = await fetch(`/api/try-on/${jobId}`, { cache: 'no-store' });
+          const snap = (await res.json()) as TryOnJobSnapshot;
+          if (!res.ok) throw new Error(typeof (snap as { error?: string }).error === 'string' ? (snap as { error?: string }).error : 'Status check failed');
+          applyVtoSnapshot(snap);
+          if (snap.status === 'completed' || snap.status === 'failed') done = true;
+        } catch {
+          // ignore transient polling issues
+        }
+      };
+
+      if (typeof window !== 'undefined') {
+        try {
+          eventSource = new EventSource(`/api/try-on/${jobId}/events`);
+          eventSource.addEventListener('progress', (e) => {
+            const snap = JSON.parse((e as MessageEvent).data) as TryOnJobSnapshot;
+            applyVtoSnapshot(snap);
+            if (snap.status === 'completed' || snap.status === 'failed') {
+              done = true;
+              eventSource?.close();
+            }
+          });
+          eventSource.addEventListener('error', () => {
+            eventSource?.close();
+            eventSource = null;
+          });
+        } catch {
+          eventSource = null;
+        }
+      }
+
+      const started = Date.now();
+      while (!done && Date.now() - started < 120000) {
+        await new Promise((r) => setTimeout(r, 1500));
+        await poll();
+      }
+      eventSource?.close();
+      if (!done) {
+        setIsGeneratingTryOn(false);
+        setVtoError({ code: 'TIMEOUT', message: 'Try-on is taking too long. Please retry.' });
+      }
+    },
+    [applyVtoSnapshot]
+  );
+
+  const handleTryOn = async () => {
+    setVtoError(null);
+    const selectedGarments = resolveTryOnGarments(selectedOutfit, selectedCategory);
+    if (!userSelfie) {
+      setVtoStage('upload');
+      setVtoStatusMessage(vtoCopy.needPhoto);
       showToast('Upload your photo first', 'error');
       return;
     }
-    const selectedGarment = selectedOutfit.tops ?? selectedOutfit.bottoms ?? selectedOutfit.accessories;
-    if (!selectedGarment) {
+    if (selectedGarments.length === 0) {
       showToast('Select at least one outfit item', 'error');
       return;
+    }
+    if (!selectedOutfit.tops && !selectedOutfit.bottoms && selectedOutfit.accessories) {
+      showToast('For realistic try-on, select a top or bottom item first.', 'error');
+      return;
+    }
+    const garmentsForRequest = selectedGarments
+      .map((item) => ({
+        item,
+        imageUrl: item.imageUrl ?? getGarmentImage(item.type),
+      }))
+      .filter((entry) => !!entry.imageUrl);
+
+    if (garmentsForRequest.length === 0) {
+      showToast('Selected items have no usable images for try-on.', 'error');
+      return;
+    }
+
+    setVtoStage('validation');
+    setVtoProgress(8);
+    const garmentCodes = garmentsForRequest.map((entry) => entry.item.code).join(', ');
+    setVtoStatusMessage(vtoCopy.validatingSelected(garmentCodes));
+
+    const personValidation = await validateImageBeforeTryOn(userSelfie, 'person');
+    if (personValidation) {
+      setVtoError({ code: 'INVALID_IMAGE', message: personValidation });
+      showToast(personValidation, 'error');
+      return;
+    }
+    for (const entry of garmentsForRequest) {
+      const garmentValidation = await validateImageBeforeTryOn(entry.imageUrl, 'garment');
+      if (garmentValidation) {
+        const message = `${entry.item.code}: ${garmentValidation}`;
+        setVtoError({ code: 'INVALID_IMAGE', message });
+        showToast(message, 'error');
+        return;
+      }
     }
 
     try {
       setIsGeneratingTryOn(true);
+      setVtoStage('processing');
+      setVtoProgress(12);
+      setVtoStatusMessage(vtoCopy.submittingSelected(garmentsForRequest.length));
       const response = await fetch('/api/try-on', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personImageUrl: userSelfie,
-          garmentImageUrl: selectedGarment.imageUrl ?? getGarmentImage(selectedGarment.type),
-          prompt: `Virtual try-on with ${selectedGarment.type}`,
+          garments: garmentsForRequest.map(({ item, imageUrl }) => ({
+            imageUrl,
+            category: toVtoCategory(item),
+            prompt: `Virtual try-on with ${item.type}`,
+            code: item.code,
+          })),
+          crop: true,
+          steps: 36,
         }),
       });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        if (
-          response.status === 402 ||
-          payload?.code === 'REPLICATE_PAYMENT_REQUIRED'
-        ) {
-          throw new Error(
-            'Virtual try-on needs Replicate billing credit. Add funds at https://replicate.com/account/billing — wait a few minutes after purchase, then try again.',
-          );
-        }
-        const msg =
-          typeof payload?.details === 'string'
-            ? payload.details
-            : typeof payload?.error === 'string'
-              ? payload.error
-              : `Try-on failed (${response.status})`;
-        throw new Error(msg);
+      const payload = (await response.json().catch(() => ({}))) as CreateTryOnJobResponse & {
+        error?: string;
+        details?: string;
+      };
+      if (!response.ok || !payload.jobId) {
+        const msg = payload.details || payload.error || `Try-on failed (${response.status})`;
+        setVtoError({ code: 'NETWORK', message: msg });
+        showToast(msg, 'error');
+        setIsGeneratingTryOn(false);
+        return;
       }
-      const imageUrl =
-        typeof payload?.imageUrl === 'string' && payload.imageUrl.startsWith('http')
-          ? payload.imageUrl
-          : null;
-      if (imageUrl) {
-        setTryOnImageUrl(imageUrl);
-        showToast('Try-on generated');
-      } else {
-        showToast('Try-on completed but no image URL was returned', 'error');
-      }
+      setVtoJobId(payload.jobId);
+      await watchTryOnJob(payload.jobId);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Try-on failed';
-      const tokenHint =
-        /missing\s+replicate/i.test(msg) || /REPLICATE_API_TOKEN/i.test(msg)
-          ? ' Add REPLICATE_API_TOKEN to .env.local (no quotes/spaces) and restart the dev server.'
-          : '';
-      showToast(`${msg}${tokenHint}`, 'error');
+      setVtoError({ code: 'UNKNOWN', message: msg });
+      showToast(msg, 'error');
+      setIsGeneratingTryOn(false);
     } finally {
       setIsGeneratingTryOn(false);
     }
@@ -994,6 +1460,8 @@ export default function App() {
       hasPrev: currentPage > 0
     };
   };
+
+  const activeTryOnGarments = resolveTryOnGarments(selectedOutfit, selectedCategory);
 
   const handleItemClick = (item: WardrobeItem) => {
     setSelectedOutfit(prev => ({
@@ -1143,7 +1611,7 @@ export default function App() {
       <section
         className={`relative flex items-center px-6 md:px-12 lg:px-20 ${
           isLoggedIn
-            ? 'min-h-screen pt-24 pb-16'
+            ? 'min-h-[56vh] pt-24 pb-10'
             : 'min-h-[min(100dvh,920px)] pt-28 pb-20 md:pt-32 md:pb-28'
         }`}
       >
@@ -1175,7 +1643,138 @@ export default function App() {
             </motion.div>
           )}
 
-          <div className={`text-center ${isLoggedIn ? 'mb-12' : 'mb-14 md:mb-16'}`}>
+          {isLoggedIn && (
+            <motion.div
+              initial={false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="mb-10"
+            >
+              <div
+                className="rounded-3xl p-6 md:p-8"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.74)',
+                  border: '3px solid #000',
+                  boxShadow: '10px 10px 0 #000',
+                }}
+              >
+                <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr] items-start">
+                  <div>
+                    <p className="mb-2 tracking-[0.12em] uppercase" style={{ fontSize: '10px', fontWeight: 700, opacity: 0.55 }}>
+                      Welcome back, {userName}
+                    </p>
+                    <h1
+                      className="mb-3"
+                      style={{
+                        fontSize: 'clamp(30px, 5.2vw, 54px)',
+                        fontWeight: 900,
+                        lineHeight: 1.02,
+                        letterSpacing: '-0.02em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Your wardrobe workspace
+                    </h1>
+                    <p className="mb-5 max-w-[56ch] text-pretty" style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500, opacity: 0.78 }}>
+                      Pick a category, select an item, and run AI try-on in seconds. Everything below is optimized for fast outfit decisions.
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-3 mb-5">
+                      {[
+                        { label: 'WARDROBE', value: wardrobeItems.length },
+                        { label: 'SAVED', value: savedOutfits.length },
+                        { label: 'TRY-ONS', value: tryOnHistory.length },
+                      ].map((kpi) => (
+                        <div
+                          key={kpi.label}
+                          className="rounded-xl px-3 py-2"
+                          style={{ background: '#FFE5C8', border: '2px solid #000' }}
+                        >
+                          <div style={{ fontSize: '20px', fontWeight: 900, lineHeight: 1 }}>{kpi.value}</div>
+                          <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.7 }}>{kpi.label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentView('wardrobe');
+                          document.getElementById('wardrobe-panel')?.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="px-6 py-3 rounded-full text-white inline-flex items-center gap-2"
+                        style={{ background: '#000', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
+                      >
+                        TRY ON A NEW OUTFIT
+                        <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentView('outfits')}
+                        className="px-6 py-3 rounded-full inline-flex items-center gap-2"
+                        style={{ background: '#FFF', border: '2px solid #000', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
+                      >
+                        OPEN SAVED LOOKS
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    className="rounded-2xl p-4"
+                    style={{ background: '#FFF', border: '2px solid #000' }}
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.7 }}>
+                        CONTINUE WHERE YOU LEFT OFF
+                      </span>
+                      {isGeneratingTryOn && (
+                        <span style={{ fontSize: '10px', fontWeight: 700 }}>
+                          {Math.round(vtoProgress)}%
+                        </span>
+                      )}
+                    </div>
+                    {tryOnHistory[0]?.imageUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentView('wardrobe');
+                          setTryOnImageUrl(tryOnHistory[0].imageUrl);
+                          document.getElementById('wardrobe-panel')?.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="w-full text-left"
+                      >
+                        <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-black mb-3">
+                          <Image src={tryOnHistory[0].imageUrl} alt="Most recent try-on" fill unoptimized className="object-cover" />
+                        </div>
+                        <div style={{ fontSize: '12px', fontWeight: 700 }}>
+                          Re-open latest try-on
+                        </div>
+                        <div style={{ fontSize: '11px', fontWeight: 500, opacity: 0.7 }}>
+                          {new Date(tryOnHistory[0].createdAt).toLocaleString()}
+                        </div>
+                      </button>
+                    ) : (
+                      <div
+                        className="rounded-xl p-4"
+                        style={{ background: '#FFE5F1', border: '2px solid #000' }}
+                      >
+                        <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: 4 }}>
+                          No try-on results yet
+                        </div>
+                        <div style={{ fontSize: '11px', fontWeight: 500, opacity: 0.75 }}>
+                          Select a garment below and run your first AI try-on.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {!isLoggedIn && (
+          <div className="text-center mb-14 md:mb-16">
             {isLoggedIn && (
               <motion.div
                 initial={false}
@@ -1323,19 +1922,16 @@ export default function App() {
               )}
             </div>
           </div>
+          )}
 
           {/* Cards Grid — guests get three clear value props; signed-in keeps a lighter pair */}
+          {!isLoggedIn && (
           <motion.div
             initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.9, duration: 0.8 }}
-            className={`grid mx-auto ${
-              isLoggedIn
-                ? 'md:grid-cols-2 gap-6 max-w-[900px]'
-                : 'md:grid-cols-3 gap-5 md:gap-6 max-w-[1100px]'
-            }`}
+            className="grid mx-auto md:grid-cols-3 gap-5 md:gap-6 max-w-[1100px]"
           >
-            {!isLoggedIn ? (
               <>
                 {[
                   {
@@ -1385,52 +1981,13 @@ export default function App() {
                   </motion.div>
                 ))}
               </>
-            ) : (
-              <>
-                <motion.div
-                  whileHover={{ y: -4 }}
-                  className="p-8 rounded-3xl relative overflow-hidden"
-                  style={{
-                    background: '#FFE5C8',
-                    border: '3px solid #000',
-                    boxShadow: '8px 8px 0 #000'
-                  }}
-                >
-                  <div className="relative z-10">
-                    <h3 className="mb-3" style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.01em' }}>
-                      Clueless
-                    </h3>
-                    <p style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
-                      Your personal AI wardrobe assistant
-                    </p>
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  whileHover={{ y: -4 }}
-                  className="p-8 rounded-3xl relative overflow-hidden"
-                  style={{
-                    background: '#FFE5C8',
-                    border: '3px solid #000',
-                    boxShadow: '8px 8px 0 #000'
-                  }}
-                >
-                  <div className="relative z-10">
-                    <h3 className="mb-3" style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.01em' }}>
-                      Clueless
-                    </h3>
-                    <p style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500 }}>
-                      Try the closet scanner beta
-                    </p>
-                  </div>
-                </motion.div>
-              </>
-            )}
           </motion.div>
+          )}
         </div>
       </section>
 
       {/* AI Recommendations Section */}
+      {!isLoggedIn && (
       <section
         id="how-it-works"
         className={`px-6 md:px-12 lg:px-20 scroll-mt-28 ${isLoggedIn ? 'py-24' : 'py-20 md:py-28'}`}
@@ -1585,9 +2142,10 @@ export default function App() {
           )}
         </div>
       </section>
+      )}
 
       {/* Value Proposition */}
-      <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-24' : 'py-20 md:py-28'}`}>
+      <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-10' : 'py-20 md:py-28'}`}>
         <div className="max-w-[1400px] mx-auto">
           <motion.div
             initial={false}
@@ -1603,11 +2161,11 @@ export default function App() {
               letterSpacing: '-0.02em',
               textTransform: 'uppercase'
             }}>
-              BUILD YOUR DIGITAL WARDROBE
+              {isLoggedIn ? 'YOUR TRY-ON WORKSPACE' : 'BUILD YOUR DIGITAL WARDROBE'}
             </h2>
             <p className="max-w-[640px] mx-auto text-pretty" style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'rgba(0,0,0,0.78)' }}>
               {isLoggedIn ? (
-                <>Catalog your entire wardrobe. Mix and match pieces to create unlimited outfit combinations.</>
+                <>Your wardrobe takes priority here: select items, preview instantly, and run try-ons without distractions.</>
               ) : (
                 <>One place for everything you wear. See it, combine it, save looks you love—then come back when you’re rushing out the door.</>
               )}
@@ -1627,7 +2185,7 @@ export default function App() {
               className="mb-16"
             >
               <div
-                className={`grid gap-8 min-w-0 ${isLoggedIn ? 'lg:grid-cols-[1fr,minmax(280px,400px)]' : 'grid-cols-1'}`}
+                className={`grid gap-8 min-w-0 ${isLoggedIn ? 'xl:grid-cols-[minmax(0,1.75fr)_minmax(340px,0.95fr)] lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.9fr)]' : 'grid-cols-1'}`}
               >
                 {/* Wardrobe Grid Section */}
                 <div className="p-8 md:p-12 rounded-3xl min-w-0"
@@ -1915,7 +2473,7 @@ export default function App() {
                       border: '2px solid #000'
                     }}>
                       <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em' }}>
-                        LIVE PREVIEW
+                        LIVE PREVIEW · {VTO_STAGE_LABELS[vtoStage]}
                       </span>
                     </div>
                     {userSelfie && (
@@ -1968,8 +2526,30 @@ export default function App() {
                       />
                     )}
 
+                    {isGeneratingTryOn && (
+                      <div className="absolute inset-x-3 bottom-3 z-30 rounded-xl border-2 border-black bg-white/90 p-3 backdrop-blur-sm">
+                        <div className="mb-2 flex items-center justify-end">
+                          <span style={{ fontSize: '10px', fontWeight: 700 }}>
+                            {Math.round(vtoProgress)}%
+                          </span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-black/15">
+                          <div
+                            className="h-2 rounded-full bg-black transition-all duration-500"
+                            style={{ width: `${Math.max(8, Math.min(100, vtoProgress))}%` }}
+                          />
+                        </div>
+                        <div
+                          className="mt-2 text-center"
+                          style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', opacity: 0.75 }}
+                        >
+                          {vtoStatusMessage}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Multiple Clothing Sticker Overlays */}
-                    {selectedOutfit.bottoms && (
+                    {!tryOnImageUrl && selectedOutfit.bottoms && (
                       <motion.div
                         key={selectedOutfit.bottoms.code}
                         initial={false}
@@ -1985,7 +2565,7 @@ export default function App() {
                       </motion.div>
                     )}
 
-                    {selectedOutfit.tops && (
+                    {!tryOnImageUrl && selectedOutfit.tops && (
                       <motion.div
                         key={selectedOutfit.tops.code}
                         initial={false}
@@ -2001,7 +2581,7 @@ export default function App() {
                       </motion.div>
                     )}
 
-                    {selectedOutfit.accessories && (
+                    {!tryOnImageUrl && selectedOutfit.accessories && (
                       <motion.div
                         key={selectedOutfit.accessories.code}
                         initial={false}
@@ -2018,7 +2598,7 @@ export default function App() {
                     )}
 
                     {/* Empty state */}
-                    {!selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.accessories && (
+                    {userSelfie && !tryOnImageUrl && !selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.accessories && (
                       <div className="absolute inset-0 flex items-center justify-center z-20">
                         <div className="text-center px-8">
                           <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-30" strokeWidth={1.5} />
@@ -2030,51 +2610,29 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Selected Items Info */}
-                  <div className="space-y-2 mb-4">
-                    <div className="p-3 rounded-xl" style={{
-                      background: selectedOutfit.tops ? '#FFE5F1' : '#f5f5f5',
-                      border: '2px solid #000'
-                    }}>
-                      <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '4px', opacity: 0.6 }}>
-                        TOP
+                  {vtoError && (
+                    <div
+                      className="mb-4 rounded-xl border-2 border-black p-3"
+                      style={{ background: '#FDE8E8' }}
+                      role="alert"
+                    >
+                      <div className="mb-1 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+                        <span style={{ fontSize: '12px', fontWeight: 700 }}>Try-on failed</span>
                       </div>
-                      <div className="break-words" style={{ fontSize: '12px', fontWeight: 600 }}>
-                        {selectedOutfit.tops ? selectedOutfit.tops.code : 'None selected'}
-                      </div>
+                      <p style={{ fontSize: '12px', fontWeight: 500 }}>{vtoError.message}</p>
+                      <p style={{ fontSize: '11px', fontWeight: 500, opacity: 0.75 }}>
+                        {inferTryOnErrorHint(vtoError.code)}
+                      </p>
                     </div>
-
-                    <div className="p-3 rounded-xl" style={{
-                      background: selectedOutfit.bottoms ? '#FFE5F1' : '#f5f5f5',
-                      border: '2px solid #000'
-                    }}>
-                      <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '4px', opacity: 0.6 }}>
-                        BOTTOM
-                      </div>
-                      <div className="break-words" style={{ fontSize: '12px', fontWeight: 600 }}>
-                        {selectedOutfit.bottoms ? selectedOutfit.bottoms.code : 'None selected'}
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-xl" style={{
-                      background: selectedOutfit.accessories ? '#FFE5F1' : '#f5f5f5',
-                      border: '2px solid #000'
-                    }}>
-                      <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '4px', opacity: 0.6 }}>
-                        ACCESSORY
-                      </div>
-                      <div className="break-words" style={{ fontSize: '12px', fontWeight: 600 }}>
-                        {selectedOutfit.accessories ? selectedOutfit.accessories.code : 'None selected'}
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
                   <div className="space-y-2">
                     <motion.button
                       whileHover={{ scale: 1.02, y: -1 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={handleTryOn}
-                      disabled={isGeneratingTryOn || !userSelfie || (!selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.accessories)}
+                      disabled={isGeneratingTryOn || !userSelfie || activeTryOnGarments.length === 0}
                       className="w-full py-3 px-4 rounded-full text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{
                         background: '#000',
@@ -2083,7 +2641,27 @@ export default function App() {
                         letterSpacing: '0.1em'
                       }}
                     >
-                      {isGeneratingTryOn ? 'GENERATING TRY-ON...' : 'RUN AI TRY-ON'}
+                      {isGeneratingTryOn
+                        ? `${Math.round(vtoProgress)}%`
+                        : 'RUN AI TRY-ON'}
+                    </motion.button>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleTryOn}
+                      disabled={isGeneratingTryOn || !userSelfie || activeTryOnGarments.length === 0}
+                      className="w-full py-3 px-4 rounded-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      style={{
+                        background: '#FFF',
+                        border: '2px solid #000',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        letterSpacing: '0.08em'
+                      }}
+                    >
+                      <RotateCcw className="w-4 h-4" strokeWidth={2.5} />
+                      RETRY TRY-ON
                     </motion.button>
 
                     <motion.button
@@ -2109,6 +2687,43 @@ export default function App() {
                     </motion.button>
 
                     <motion.button
+                      whileHover={{ scale: 1.02, y: -1 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowSelfieUpload(true)}
+                      className="w-full py-3 px-4 rounded-full flex items-center justify-center gap-2"
+                      style={{
+                        background: '#FFF',
+                        border: '2px solid #000',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        letterSpacing: '0.08em'
+                      }}
+                      type="button"
+                    >
+                      <Camera className="w-4 h-4" strokeWidth={2.5} />
+                      UPLOAD NEW PHOTO
+                    </motion.button>
+
+                    {tryOnImageUrl && (
+                      <a
+                        href={tryOnImageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full py-3 px-4 rounded-full flex items-center justify-center gap-2"
+                        style={{
+                          background: '#FFF',
+                          border: '2px solid #000',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          letterSpacing: '0.08em'
+                        }}
+                      >
+                        <Download className="w-4 h-4" strokeWidth={2.5} />
+                        DOWNLOAD RESULT
+                      </a>
+                    )}
+
+                    <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setSelectedOutfit({})}
@@ -2124,6 +2739,32 @@ export default function App() {
                       CLEAR ALL
                     </motion.button>
                   </div>
+
+                  {tryOnHistory.length > 0 && (
+                    <div className="mt-5">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em' }}>
+                          RECENT TRY-ONS
+                        </span>
+                        <span style={{ fontSize: '10px', fontWeight: 600, opacity: 0.65 }}>
+                          {tryOnHistory.length}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {tryOnHistory.slice(0, 6).map((entry) => (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => setTryOnImageUrl(entry.imageUrl)}
+                            className="relative aspect-[3/4] overflow-hidden rounded-lg border-2 border-black hover:opacity-90 active:opacity-80"
+                            title={`Open try-on ${new Date(entry.createdAt).toLocaleString()}`}
+                          >
+                            <Image src={entry.imageUrl} alt="Past try-on result" fill unoptimized className="object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               </div>
               )}
@@ -2367,6 +3008,7 @@ export default function App() {
       </section>
 
       {/* Social Proof / Demo Section */}
+      {!isLoggedIn && (
       <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-24' : 'py-20 md:py-28'}`}>
         <div className="max-w-[1400px] mx-auto">
           <div className="grid md:grid-cols-2 gap-8">
@@ -2464,6 +3106,7 @@ export default function App() {
           </div>
         </div>
       </section>
+      )}
 
       {/* Personalized Section (for logged in users) */}
       {isLoggedIn && (
@@ -2538,6 +3181,7 @@ export default function App() {
       )}
 
       {/* Testimonial */}
+      {!isLoggedIn && (
       <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-24' : 'py-20 md:py-28'}`}>
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -2584,8 +3228,10 @@ export default function App() {
           </div>
         </motion.div>
       </section>
+      )}
 
       {/* Final CTA */}
+      {!isLoggedIn && (
       <section className={`px-6 md:px-12 lg:px-20 ${isLoggedIn ? 'py-32' : 'py-24 md:py-36'}`}>
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -2640,6 +3286,7 @@ export default function App() {
           </motion.button>
         </motion.div>
       </section>
+      )}
 
       {/* Floating Action Buttons */}
       {isLoggedIn && !showChat && currentView === 'wardrobe' && (
