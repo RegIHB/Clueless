@@ -38,6 +38,9 @@ import type { Session } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
 
 const SUPABASE_ON = isSupabaseConfigured();
+const AUTH_HYDRATION_TELEMETRY =
+  process.env.NODE_ENV !== 'production' ||
+  process.env.NEXT_PUBLIC_AUTH_HYDRATION_TELEMETRY === '1';
 
 const LOCAL_SAVED_OUTFITS_KEY = 'clueless_saved_outfits_v1';
 
@@ -76,6 +79,11 @@ function hydrateSavedOutfitFromWardrobe(outfit: SavedOutfit, wardrobe: WardrobeI
     bottoms: outfit.bottoms ? byCode.get(outfit.bottoms.code) ?? outfit.bottoms : undefined,
     accessories: outfit.accessories ? byCode.get(outfit.accessories.code) ?? outfit.accessories : undefined,
   };
+}
+
+function trackAuthHydration(event: string, data: Record<string, unknown> = {}): void {
+  if (!AUTH_HYDRATION_TELEMETRY) return;
+  console.info('[telemetry/auth-hydration]', event, data);
 }
 
 export default function App() {
@@ -145,22 +153,36 @@ export default function App() {
     } = await supabase.auth.getUser();
     if (error) {
       console.error('resolveAuthenticatedUserId:getUser', error);
+      trackAuthHydration('resolve_user_error', {
+        hasError: true,
+        message: error.message,
+      });
       return null;
     }
+    trackAuthHydration('resolve_user_ok', { hasUser: Boolean(user) });
     return user?.id ?? null;
   }, []);
 
   const hydrateRemoteUser = useCallback(async (userId: string): Promise<boolean> => {
     const supabase = createBrowserSupabaseClient();
     await supabase.auth.refreshSession().catch(() => {});
+    trackAuthHydration('hydrate_start', {
+      requestedUser: Boolean(userId),
+      hasLocalUserRef: Boolean(wardrobeUserIdRef.current),
+    });
     const uid = await resolveAuthenticatedUserId();
     if (!uid || uid !== userId) {
       console.error('hydrateRemoteUser: no valid session after refresh', {
         expected: userId,
         got: uid,
       });
+      trackAuthHydration('hydrate_rejected', {
+        resolvedUser: Boolean(uid),
+        matchesRequestedUser: uid === userId,
+      });
       return false;
     }
+    trackAuthHydration('hydrate_verified', { matchesRequestedUser: true });
     wardrobeUserIdRef.current = uid;
 
     if (savedOutfitsUserIdRef.current !== null && savedOutfitsUserIdRef.current !== uid) {
@@ -186,23 +208,28 @@ export default function App() {
     const localState = getWardrobeStorageState(uid);
     if (localState.kind === 'items') {
       setWardrobeItems(localState.items);
+      trackAuthHydration('wardrobe_local_items', { count: localState.items.length });
     } else if (localState.kind === 'empty') {
       setWardrobeItems([]);
+      trackAuthHydration('wardrobe_local_empty', {});
       // Recovery path: if local storage was accidentally wiped but cloud has items, restore from cloud.
       const cloudItems = await fetchWardrobe(supabase, uid);
       if (!mountedRef.current) return true;
       if (cloudItems && cloudItems.length > 0) {
         setWardrobeItems(cloudItems);
         storage.setWardrobe(uid, cloudItems);
+        trackAuthHydration('wardrobe_cloud_recovered', { count: cloudItems.length });
       }
     } else {
       const items = await fetchWardrobe(supabase, uid);
       if (!mountedRef.current) return true;
       if (items === null) {
         console.error('fetchWardrobe failed — wardrobe not updated');
+        trackAuthHydration('wardrobe_cloud_fetch_failed', {});
       } else {
         setWardrobeItems(items);
         storage.setWardrobe(uid, items);
+        trackAuthHydration('wardrobe_cloud_loaded', { count: items.length });
       }
     }
 
@@ -289,6 +316,9 @@ export default function App() {
 
     async function bootstrapFromStorage() {
       const session = await readSessionWithRetry();
+      trackAuthHydration('bootstrap_session_read', {
+        hasSessionUser: Boolean(session?.user),
+      });
       if (cancelled) return;
       if (session?.user) {
         setIsLoggedIn(true);
@@ -304,12 +334,17 @@ export default function App() {
           if (!ok && !cancelled) {
             // Do not wipe state on ambiguous auth reads. SIGNED_OUT will clear state when definitive.
             console.warn('bootstrapFromStorage: hydrateRemoteUser could not verify user');
+            trackAuthHydration('bootstrap_hydrate_not_verified', {});
           }
         } catch (e) {
           console.error('Supabase bootstrap failed', e);
           // Keep any already-hydrated local data; avoid wiping wardrobe on transient network/auth failures.
+          trackAuthHydration('bootstrap_hydrate_error', {
+            message: e instanceof Error ? e.message : 'unknown',
+          });
         }
       } else {
+        trackAuthHydration('bootstrap_signed_out', {});
         clearRemoteSessionState();
       }
       if (!cancelled) setSupabaseReady(true);
@@ -321,6 +356,10 @@ export default function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (cancelled) return;
+      trackAuthHydration('auth_state_change', {
+        event,
+        hasSessionUser: Boolean(session?.user),
+      });
 
       // Storage is loaded via getSession() + retry above. INITIAL_SESSION often races before
       // cookie storage is readable and would hydrate with no user, wiping data after refresh.
