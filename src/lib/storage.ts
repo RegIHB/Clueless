@@ -39,8 +39,10 @@ function safeSet(storageKeyName: string, value: unknown): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(storageKeyName, JSON.stringify(value));
-  } catch {
-    // quota or unsupported
+  } catch (err) {
+    // Most likely DOMException("QuotaExceededError"). Log so the cause is visible
+    // in DevTools instead of silently dropping wardrobe writes.
+    console.warn('[storage] localStorage write failed', { key: storageKeyName, err });
   }
 }
 

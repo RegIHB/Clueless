@@ -337,6 +337,11 @@ export default function App() {
   const itemsPerPage = 8;
   const [userName, setUserName] = useState('Alex');
   const [supabaseReady, setSupabaseReady] = useState(!SUPABASE_ON);
+  // Flips true only after hydrateRemoteUser successfully resolves wardrobe state
+  // (local + cloud reconciled). Until then, the auto-save useEffect must NOT
+  // persist wardrobeItems to localStorage — bootstrap intermediate states
+  // (empty arrays during fetches) would otherwise overwrite real user data.
+  const [wardrobeHydrated, setWardrobeHydrated] = useState(false);
 
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
   const [debugFillLoading, setDebugFillLoading] = useState(false);
@@ -598,11 +603,17 @@ export default function App() {
       // Recovery path: local [] may be stale; fetch cloud before showing an empty closet.
       const cloudItems = await loadCloudWardrobe();
       if (!mountedRef.current) return true;
-      if (cloudItems && cloudItems.length > 0) {
+      if (cloudItems === null) {
+        // Ambiguous (RLS / network failure). Don't wipe in-memory state — leave
+        // wardrobeItems as-is so a transient cloud failure can't lock the user
+        // into an empty wardrobe.
+        trackAuthHydration('wardrobe_cloud_fetch_failed_keep_local', {});
+      } else if (cloudItems.length > 0) {
         setWardrobeItems(cloudItems);
         storage.setWardrobe(uid, cloudItems);
         trackAuthHydration('wardrobe_cloud_recovered', { count: cloudItems.length });
       } else {
+        // Cloud confirmed empty.
         setWardrobeItems([]);
       }
     } else {
@@ -655,12 +666,14 @@ export default function App() {
       setSavedOutfits(merged);
       persistSavedOutfitsForUser(uid, merged);
     }
+    if (mountedRef.current) setWardrobeHydrated(true);
     return true;
   }, [resolveAuthenticatedUserId]);
 
   const clearRemoteSessionState = useCallback(() => {
     wardrobeUserIdRef.current = null;
     savedOutfitsUserIdRef.current = null;
+    setWardrobeHydrated(false);
     setIsLoggedIn(false);
     setLocation('Berlin');
     setWeather({ temp: 12, condition: 'Cloudy' });
@@ -874,11 +887,16 @@ export default function App() {
   }, [savedOutfits]);
 
   useEffect(() => {
-    if (!SUPABASE_ON || !isLoggedIn || !supabaseReady) return;
+    // Persistence safety net for wardrobeItems mutations. Gated on `wardrobeHydrated`
+    // so bootstrap-time intermediate states (e.g. an in-flight cloud fetch leaving
+    // wardrobeItems briefly at []) can never overwrite real user data in localStorage.
+    // Every user-action handler (handleAddItem / handleDeleteWardrobeItem / etc.) ALSO
+    // saves explicitly — this effect is belt-and-suspenders.
+    if (!SUPABASE_ON || !isLoggedIn || !supabaseReady || !wardrobeHydrated) return;
     const uid = wardrobeUserIdRef.current;
     if (!uid) return;
     storage.setWardrobe(uid, wardrobeItems);
-  }, [wardrobeItems, isLoggedIn, supabaseReady]);
+  }, [wardrobeItems, isLoggedIn, supabaseReady, wardrobeHydrated]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1351,6 +1369,13 @@ export default function App() {
     setWardrobeItems((prev) => {
       const next = [...prev, newItem];
       const sortOrder = next.length - 1;
+      // Persist to localStorage SYNCHRONOUSLY using the cached uid. We must not
+      // gate persistence on the async `getUser()` below — if that call races
+      // (fresh session not yet readable in this tab), the item would live in
+      // memory only and be lost on refresh. The auto-save useEffect is a
+      // secondary safety net but only runs after wardrobeHydrated is true.
+      const cachedUid = wardrobeUserIdRef.current;
+      if (cachedUid) storage.setWardrobe(cachedUid, next);
       if (SUPABASE_ON) {
         void (async () => {
           try {
@@ -1363,7 +1388,8 @@ export default function App() {
               return;
             }
             wardrobeUserIdRef.current = user.id;
-            storage.setWardrobe(user.id, next);
+            // Re-save under the verified uid in case cachedUid was null (cold tab) or stale.
+            if (cachedUid !== user.id) storage.setWardrobe(user.id, next);
             const response = await fetch('/api/wardrobe', {
               method: 'POST',
               credentials: 'include',
