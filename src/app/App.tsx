@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast as sonnerToast } from 'sonner';
-import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw, Bug } from 'lucide-react';
+import { Shirt, User, LogOut, ChevronRight, ChevronLeft, Sparkles, Calendar, TrendingUp, MessageCircle, MapPin, Cloud, Plus, Check, Heart, Camera, Loader2, RefreshCw, Bug, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import { ClothingIcon } from './components/ClothingIcon';
 import { ClothingSticker } from './components/ClothingSticker';
@@ -29,6 +29,7 @@ import {
   insertSavedOutfit,
   deleteSavedOutfit,
   insertWardrobeItem,
+  deleteWardrobeItem,
   bulkInsertWardrobeItems,
   ensureProfileRow,
   updateProfile,
@@ -102,6 +103,7 @@ export default function App() {
   );
   const [savedOutfitsLoading, setSavedOutfitsLoading] = useState(false);
   const [deletingOutfitId, setDeletingOutfitId] = useState<string | null>(null);
+  const [deletingItemCode, setDeletingItemCode] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'wardrobe' | 'outfits'>('wardrobe');
   const [currentPage, setCurrentPage] = useState(0);
   const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
@@ -640,6 +642,48 @@ export default function App() {
 
     setSavedOutfits((prev) => prev.filter((o) => o.id !== outfit.id));
     showToast('Outfit removed');
+  };
+
+  const handleDeleteWardrobeItem = async (item: WardrobeItem) => {
+    const label = wardrobeItemLabel(item) || item.type;
+    if (!window.confirm(`Remove “${label}” from your wardrobe? This cannot be undone.`)) return;
+
+    if (SUPABASE_ON) {
+      setDeletingItemCode(item.code);
+      try {
+        const supabase = createBrowserSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          showToast('Sign in to manage your wardrobe', 'error');
+          return;
+        }
+        const ok = await deleteWardrobeItem(supabase, user.id, item.code);
+        if (!ok) {
+          showToast('Could not delete item — try again', 'error');
+          return;
+        }
+      } finally {
+        setDeletingItemCode(null);
+      }
+    }
+
+    setWardrobeItems((prev) => {
+      const next = prev.filter((i) => i.code !== item.code);
+      const uid = wardrobeUserIdRef.current;
+      if (uid) storage.setWardrobe(uid, next);
+      return next;
+    });
+
+    setSelectedOutfit((prev) => {
+      if (prev[item.category]?.code !== item.code) return prev;
+      const next = { ...prev };
+      delete next[item.category];
+      return next;
+    });
+
+    showToast(`${item.type} removed from wardrobe`);
   };
 
   const handleAddItem = (item: {
@@ -1616,75 +1660,96 @@ export default function App() {
                   {getPaginatedItems(selectedCategory).items.map((item, idx) => {
                     const isSelected = selectedOutfit[item.category]?.code === item.code;
                     const titleText = item.title?.trim();
+                    const isDeleting = deletingItemCode === item.code;
                     return (
-                      <motion.button
+                      <motion.div
                         key={item.code}
-                        type="button"
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1], delay: idx * 0.04 }}
-                        className="group relative flex flex-col items-center text-center cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-black focus-visible:outline-offset-4"
-                        onClick={() => handleItemClick(item)}
-                        aria-pressed={isSelected}
-                        aria-label={`${titleText ?? item.type} — ${isSelected ? 'selected' : 'tap to add to outfit'}`}
+                        className="group relative"
                       >
-                        <div
-                          className={`tile-frame relative aspect-square w-full mb-3 flex items-center justify-center overflow-hidden transition-[background-color,opacity] duration-[var(--duration-base)] ease-[var(--ease-out)] ${item.imageUrl ? 'p-0' : 'p-4'}`}
+                        <button
+                          type="button"
+                          className="flex flex-col items-center text-center cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-black focus-visible:outline-offset-4 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => handleItemClick(item)}
+                          disabled={isDeleting}
+                          aria-pressed={isSelected}
+                          aria-label={`${titleText ?? item.type} — ${isSelected ? 'selected' : 'tap to add to outfit'}`}
                         >
-                          {item.imageUrl ? (
-                            <Image
-                              src={item.imageUrl}
-                              alt={titleText ?? item.type}
-                              fill
-                              className="object-contain transition-transform duration-[var(--duration-slow)] ease-[var(--ease-out)] group-hover:scale-[1.06] group-active:scale-[1.02]"
-                              sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 22vw"
-                              unoptimized
-                            />
-                          ) : (
-                            <div className="transition-transform duration-[var(--duration-slow)] ease-[var(--ease-out)] group-hover:scale-[1.06] group-active:scale-[1.02]">
-                              <ClothingIcon type={item.type} />
-                            </div>
-                          )}
-
-                          {/* Selected: subtle filled dot in the top-right (no heavy ring/border). */}
-                          {isSelected && (
-                            <span
-                              className="absolute top-2 right-2 w-2 h-2 rounded-full bg-black"
-                              aria-hidden
-                            />
-                          )}
-
-                          {/* Hover quick-action: tiny "+" / "✓" badge that fades in under the cursor — yeezy-style. */}
-                          <span
-                            className={`pointer-events-none absolute bottom-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full text-white opacity-0 translate-y-1 transition-[opacity,transform] duration-[var(--duration-base)] ease-[var(--ease-out)] group-hover:opacity-100 group-hover:translate-y-0 ${isSelected ? 'bg-black' : 'bg-black/85'}`}
-                            aria-hidden
-                          >
-                            {isSelected ? (
-                              <Check className="w-3.5 h-3.5" strokeWidth={3} />
-                            ) : (
-                              <Plus className="w-3.5 h-3.5" strokeWidth={3} />
-                            )}
-                          </span>
-                        </div>
-
-                        <div className="px-1 min-w-0 w-full">
-                          {/* Monospace product code — always visible, yeezy signature. Underlines when selected. */}
                           <div
-                            className={`font-mono leading-none tracking-[0.04em] transition-[color,text-decoration-color] duration-[var(--duration-base)] ${isSelected ? 'underline decoration-2 underline-offset-[6px]' : 'no-underline'}`}
-                            style={{ fontSize: '11px', fontWeight: 700, color: '#000' }}
+                            className={`tile-frame relative aspect-square w-full mb-3 flex items-center justify-center overflow-hidden transition-[background-color,opacity] duration-[var(--duration-base)] ease-[var(--ease-out)] ${item.imageUrl ? 'p-0' : 'p-4'}`}
                           >
-                            {item.code.toUpperCase()}
-                          </div>
-                          {titleText && (
-                            <div
-                              className="mt-1.5 line-clamp-1 text-black/55 group-hover:text-black/80 transition-colors duration-[var(--duration-base)]"
-                              style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.04em' }}
+                            {item.imageUrl ? (
+                              <Image
+                                src={item.imageUrl}
+                                alt={titleText ?? item.type}
+                                fill
+                                className="object-contain transition-transform duration-[var(--duration-slow)] ease-[var(--ease-out)] group-hover:scale-[1.06] group-active:scale-[1.02]"
+                                sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 22vw"
+                                unoptimized
+                              />
+                            ) : (
+                              <div className="transition-transform duration-[var(--duration-slow)] ease-[var(--ease-out)] group-hover:scale-[1.06] group-active:scale-[1.02]">
+                                <ClothingIcon type={item.type} />
+                              </div>
+                            )}
+
+                            {/* Selected: subtle filled dot in the top-right (no heavy ring/border). */}
+                            {isSelected && (
+                              <span
+                                className="absolute top-2 right-2 w-2 h-2 rounded-full bg-black"
+                                aria-hidden
+                              />
+                            )}
+
+                            {/* Hover quick-action: tiny "+" / "✓" badge that fades in under the cursor — yeezy-style. */}
+                            <span
+                              className={`pointer-events-none absolute bottom-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full text-white opacity-0 translate-y-1 transition-[opacity,transform] duration-[var(--duration-base)] ease-[var(--ease-out)] group-hover:opacity-100 group-hover:translate-y-0 ${isSelected ? 'bg-black' : 'bg-black/85'}`}
+                              aria-hidden
                             >
-                              {titleText.length > 28 ? `${titleText.slice(0, 28)}…` : titleText}
+                              {isSelected ? (
+                                <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                              ) : (
+                                <Plus className="w-3.5 h-3.5" strokeWidth={3} />
+                              )}
+                            </span>
+                          </div>
+
+                          <div className="px-1 min-w-0 w-full">
+                            {/* Monospace product code — always visible, yeezy signature. Underlines when selected. */}
+                            <div
+                              className={`font-mono leading-none tracking-[0.04em] transition-[color,text-decoration-color] duration-[var(--duration-base)] ${isSelected ? 'underline decoration-2 underline-offset-[6px]' : 'no-underline'}`}
+                              style={{ fontSize: '11px', fontWeight: 700, color: '#000' }}
+                            >
+                              {item.code.toUpperCase()}
                             </div>
+                            {titleText && (
+                              <div
+                                className="mt-1.5 line-clamp-1 text-black/55 group-hover:text-black/80 transition-colors duration-[var(--duration-base)]"
+                                style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.04em' }}
+                              >
+                                {titleText.length > 28 ? `${titleText.slice(0, 28)}…` : titleText}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteWardrobeItem(item)}
+                          disabled={isDeleting}
+                          className="absolute top-1.5 left-1.5 inline-flex items-center justify-center w-7 h-7 rounded-full bg-white text-black border-2 border-black opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-red-100 transition-opacity duration-200 ease-out disabled:opacity-100 disabled:cursor-wait shadow-[2px_2px_0_#000]"
+                          aria-label={`Remove ${titleText ?? item.type} from wardrobe`}
+                          title="Remove from wardrobe"
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2.5} aria-hidden />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" strokeWidth={2.5} aria-hidden />
                           )}
-                        </div>
-                      </motion.button>
+                        </button>
+                      </motion.div>
                     );
                   })}
                         </div>
