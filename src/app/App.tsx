@@ -710,7 +710,7 @@ export default function App() {
       showToast('Could not sync your wardrobe right now. Keeping local data.', 'error');
     }
     router.refresh();
-  }, [hydrateRemoteUser, router, clearRemoteSessionState]);
+  }, [hydrateRemoteUser, router]);
 
   useEffect(() => {
     if (!SUPABASE_ON) return;
@@ -730,21 +730,42 @@ export default function App() {
       return session;
     }
 
+    async function confirmSignedOut(): Promise<boolean> {
+      // Hard reload can race auth storage hydration; avoid destructive clears until
+      // we repeatedly verify there is truly no authenticated user.
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const uid = await resolveAuthenticatedUserId();
+        if (uid) {
+          trackAuthHydration('signed_out_recheck_found_user', { attempt: attempt + 1 });
+          return false;
+        }
+        await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
+      }
+      trackAuthHydration('signed_out_recheck_confirmed', {});
+      return true;
+    }
+
     async function bootstrapFromStorage() {
       const session = await readSessionWithRetry();
       trackAuthHydration('bootstrap_session_read', {
         hasSessionUser: Boolean(session?.user),
       });
       if (cancelled) return;
-      if (session?.user) {
+      const bootstrapUserId = session?.user?.id ?? (await resolveAuthenticatedUserId());
+      trackAuthHydration('bootstrap_user_resolved', {
+        hasSessionUser: Boolean(session?.user),
+        hasResolvedUser: Boolean(bootstrapUserId),
+      });
+
+      if (bootstrapUserId) {
         setIsLoggedIn(true);
-        wardrobeUserIdRef.current = session.user.id;
-        const wState = getWardrobeStorageState(session.user.id);
+        wardrobeUserIdRef.current = bootstrapUserId;
+        const wState = getWardrobeStorageState(bootstrapUserId);
         if (wState.kind === 'items') {
           setWardrobeItems(wState.items);
         }
         try {
-          const ok = await hydrateRemoteUser(session.user.id);
+          const ok = await hydrateRemoteUser(bootstrapUserId);
           if (!ok && !cancelled) {
             // Do not wipe state on ambiguous auth reads. SIGNED_OUT will clear state when definitive.
             console.warn('bootstrapFromStorage: hydrateRemoteUser could not verify user');
@@ -758,8 +779,14 @@ export default function App() {
           });
         }
       } else {
-        trackAuthHydration('bootstrap_signed_out', {});
-        clearRemoteSessionState();
+        trackAuthHydration('bootstrap_signed_out_pending_confirm', {});
+        const definitelySignedOut = await confirmSignedOut();
+        if (definitelySignedOut) {
+          trackAuthHydration('bootstrap_signed_out', {});
+          clearRemoteSessionState();
+        } else {
+          trackAuthHydration('bootstrap_signed_out_suppressed', {});
+        }
       }
       if (!cancelled) setSupabaseReady(true);
     }
@@ -803,6 +830,16 @@ export default function App() {
       }
 
       if (event === 'SIGNED_OUT') {
+        const definitelySignedOut = await confirmSignedOut();
+        if (!definitelySignedOut) {
+          trackAuthHydration('signed_out_event_suppressed', {});
+          const uid = await resolveAuthenticatedUserId();
+          if (uid) {
+            setIsLoggedIn(true);
+            void hydrateRemoteUser(uid);
+          }
+          return;
+        }
         clearRemoteSessionState();
         router.refresh();
       }
@@ -812,7 +849,7 @@ export default function App() {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [hydrateRemoteUser, router, clearRemoteSessionState]);
+  }, [hydrateRemoteUser, router, clearRemoteSessionState, resolveAuthenticatedUserId]);
 
   useEffect(() => {
     if (!SUPABASE_ON || !supabaseReady) return;
