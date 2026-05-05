@@ -16,7 +16,8 @@ import { SelfieUpload } from './components/SelfieUpload';
 import { AuthDialog } from './components/AuthDialog';
 import { ResetPasswordDialog } from './components/ResetPasswordDialog';
 import { getGarmentImage } from '@/lib/garment-images';
-import { getWardrobeStorageState, storage } from '@/lib/storage';
+// Wardrobe persistence is cloud-only. localStorage is intentionally NOT used as
+// a wardrobe cache — every refresh fetches authoritative state from Supabase.
 import { WARDROBE_TEST_ITEMS, wardrobeSeedToItem } from '@/lib/wardrobe-test-data';
 import {
   createBrowserSupabaseClient,
@@ -337,11 +338,6 @@ export default function App() {
   const itemsPerPage = 8;
   const [userName, setUserName] = useState('Alex');
   const [supabaseReady, setSupabaseReady] = useState(!SUPABASE_ON);
-  // Flips true only after hydrateRemoteUser successfully resolves wardrobe state
-  // (local + cloud reconciled). Until then, the auto-save useEffect must NOT
-  // persist wardrobeItems to localStorage — bootstrap intermediate states
-  // (empty arrays during fetches) would otherwise overwrite real user data.
-  const [wardrobeHydrated, setWardrobeHydrated] = useState(false);
 
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
   const [debugFillLoading, setDebugFillLoading] = useState(false);
@@ -561,72 +557,19 @@ export default function App() {
       return viaApi;
     };
 
-    // Local-first wardrobe (same idea as Clueless). Distinguish "never saved" vs "user cleared closet".
-    const localState = getWardrobeStorageState(uid);
-    if (localState.kind === 'items') {
-      setWardrobeItems(localState.items);
-      trackAuthHydration('wardrobe_local_items', { count: localState.items.length });
-      // Reconcile local-first edits with cloud so logout/login doesn't "lose" recent changes.
-      const cloudItems = await loadCloudWardrobe();
-      if (!mountedRef.current) return true;
-      if (cloudItems && cloudItems.length >= 0) {
-        const cloudCodes = new Set(cloudItems.map((i) => i.code));
-        const missingInCloud = localState.items.filter((i) => !cloudCodes.has(i.code));
-        if (missingInCloud.length > 0) {
-          const insertResult = await bulkInsertWardrobeItems(
-            supabase,
-            uid,
-            missingInCloud,
-            cloudItems.length
-          );
-          if ('error' in insertResult) {
-            console.error('wardrobe local->cloud reconcile failed', insertResult.error);
-          } else {
-            const fresh = await loadCloudWardrobe();
-            if (fresh) {
-              setWardrobeItems(fresh);
-              storage.setWardrobe(uid, fresh);
-              trackAuthHydration('wardrobe_cloud_reconciled', { count: fresh.length });
-            }
-          }
-        } else {
-          const merged = [...cloudItems];
-          for (const localItem of localState.items) {
-            if (!merged.some((i) => i.code === localItem.code)) merged.push(localItem);
-          }
-          setWardrobeItems(merged);
-          storage.setWardrobe(uid, merged);
-        }
-      }
-    } else if (localState.kind === 'empty') {
-      trackAuthHydration('wardrobe_local_empty', {});
-      // Recovery path: local [] may be stale; fetch cloud before showing an empty closet.
-      const cloudItems = await loadCloudWardrobe();
-      if (!mountedRef.current) return true;
-      if (cloudItems === null) {
-        // Ambiguous (RLS / network failure). Don't wipe in-memory state — leave
-        // wardrobeItems as-is so a transient cloud failure can't lock the user
-        // into an empty wardrobe.
-        trackAuthHydration('wardrobe_cloud_fetch_failed_keep_local', {});
-      } else if (cloudItems.length > 0) {
-        setWardrobeItems(cloudItems);
-        storage.setWardrobe(uid, cloudItems);
-        trackAuthHydration('wardrobe_cloud_recovered', { count: cloudItems.length });
-      } else {
-        // Cloud confirmed empty.
-        setWardrobeItems([]);
-      }
+    // CLOUD-ONLY WARDROBE LOAD. localStorage is never read or written for wardrobe
+    // items — Supabase is the single, authoritative source. Refresh always fetches
+    // here. If the cloud is unreachable, we keep wardrobeItems at its current value
+    // (the default `[]` on a cold mount, or whatever's already in memory) and a
+    // toast surfaces the failure so the user retries.
+    const cloudItems = await loadCloudWardrobe();
+    if (!mountedRef.current) return true;
+    if (cloudItems !== null) {
+      setWardrobeItems(cloudItems);
+      trackAuthHydration('wardrobe_cloud_loaded', { count: cloudItems.length });
     } else {
-      const items = await loadCloudWardrobe();
-      if (!mountedRef.current) return true;
-      if (items === null) {
-        console.error('wardrobe cloud load failed (client + /api/wardrobe)');
-        trackAuthHydration('wardrobe_cloud_fetch_failed', {});
-      } else {
-        setWardrobeItems(items);
-        storage.setWardrobe(uid, items);
-        trackAuthHydration('wardrobe_cloud_loaded', { count: items.length });
-      }
+      console.error('wardrobe cloud load failed (client + /api/wardrobe)');
+      trackAuthHydration('wardrobe_cloud_fetch_failed', {});
     }
 
     const localSaved = loadSavedOutfitsForUser(uid);
@@ -666,14 +609,12 @@ export default function App() {
       setSavedOutfits(merged);
       persistSavedOutfitsForUser(uid, merged);
     }
-    if (mountedRef.current) setWardrobeHydrated(true);
     return true;
   }, [resolveAuthenticatedUserId]);
 
   const clearRemoteSessionState = useCallback(() => {
     wardrobeUserIdRef.current = null;
     savedOutfitsUserIdRef.current = null;
-    setWardrobeHydrated(false);
     setIsLoggedIn(false);
     setLocation('Berlin');
     setWeather({ temp: 12, condition: 'Cloudy' });
@@ -707,20 +648,16 @@ export default function App() {
     if (!user) return;
     setIsLoggedIn(true);
     wardrobeUserIdRef.current = user.id;
-    const wState = getWardrobeStorageState(user.id);
-    if (wState.kind === 'items') {
-      setWardrobeItems(wState.items);
-    }
-    // `empty` / `none`: do not clear here — hydrate loads cloud first so saved rows stay visible.
+    // No local fast-render: wardrobeItems stays at [] until hydrate fetches cloud.
     try {
       const ok = await hydrateRemoteUser(user.id);
       if (!ok) {
-        showToast('Could not verify your account yet. Keeping local wardrobe.', 'error');
+        showToast('Could not verify your account yet. Try again.', 'error');
         return;
       }
     } catch (e) {
       console.error('Post sign-in sync failed', e);
-      showToast('Could not sync your wardrobe right now. Keeping local data.', 'error');
+      showToast('Could not load your wardrobe from the cloud. Try again.', 'error');
     }
     router.refresh();
   }, [hydrateRemoteUser, router]);
@@ -773,10 +710,7 @@ export default function App() {
       if (bootstrapUserId) {
         setIsLoggedIn(true);
         wardrobeUserIdRef.current = bootstrapUserId;
-        const wState = getWardrobeStorageState(bootstrapUserId);
-        if (wState.kind === 'items') {
-          setWardrobeItems(wState.items);
-        }
+        // No local fast-render: wardrobeItems stays at [] until hydrate fetches cloud.
         try {
           const ok = await hydrateRemoteUser(bootstrapUserId);
           if (!ok && !cancelled) {
@@ -886,17 +820,7 @@ export default function App() {
     }
   }, [savedOutfits]);
 
-  useEffect(() => {
-    // Persistence safety net for wardrobeItems mutations. Gated on `wardrobeHydrated`
-    // so bootstrap-time intermediate states (e.g. an in-flight cloud fetch leaving
-    // wardrobeItems briefly at []) can never overwrite real user data in localStorage.
-    // Every user-action handler (handleAddItem / handleDeleteWardrobeItem / etc.) ALSO
-    // saves explicitly — this effect is belt-and-suspenders.
-    if (!SUPABASE_ON || !isLoggedIn || !supabaseReady || !wardrobeHydrated) return;
-    const uid = wardrobeUserIdRef.current;
-    if (!uid) return;
-    storage.setWardrobe(uid, wardrobeItems);
-  }, [wardrobeItems, isLoggedIn, supabaseReady, wardrobeHydrated]);
+  // (Removed: wardrobeItems → localStorage auto-save. Wardrobe is cloud-only.)
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1325,12 +1249,7 @@ export default function App() {
       }
     }
 
-    setWardrobeItems((prev) => {
-      const next = prev.filter((i) => i.code !== item.code);
-      const uid = wardrobeUserIdRef.current;
-      if (uid) storage.setWardrobe(uid, next);
-      return next;
-    });
+    setWardrobeItems((prev) => prev.filter((i) => i.code !== item.code));
 
     setSelectedOutfit((prev) => {
       if (prev[item.category]?.code !== item.code) return prev;
@@ -1366,84 +1285,51 @@ export default function App() {
       ...(item.attribution ? { attribution: item.attribution } : {}),
     };
 
+    // Optimistic in-memory add. Cloud is the only persistence layer — if the POST
+    // fails, we roll back the in-memory state so the UI never shows a non-persisted
+    // item the user might believe is saved.
+    let nextLength = 0;
     setWardrobeItems((prev) => {
       const next = [...prev, newItem];
-      const sortOrder = next.length - 1;
-      // Persist to localStorage SYNCHRONOUSLY using the cached uid. We must not
-      // gate persistence on the async `getUser()` below — if that call races
-      // (fresh session not yet readable in this tab), the item would live in
-      // memory only and be lost on refresh. The auto-save useEffect is a
-      // secondary safety net but only runs after wardrobeHydrated is true.
-      const cachedUid = wardrobeUserIdRef.current;
-      if (cachedUid) storage.setWardrobe(cachedUid, next);
-      if (SUPABASE_ON) {
-        void (async () => {
-          try {
-            const supabase = createBrowserSupabaseClient();
-            const {
-              data: { user },
-            } = await supabase.auth.getUser();
-            if (!user) {
-              showToast(`${item.type} saved on this device. Sign in to sync to cloud.`, 'error');
-              return;
-            }
-            wardrobeUserIdRef.current = user.id;
-            // Re-save under the verified uid in case cachedUid was null (cold tab) or stale.
-            if (cachedUid !== user.id) storage.setWardrobe(user.id, next);
-            const response = await fetch('/api/wardrobe', {
-              method: 'POST',
-              credentials: 'include',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                ...newItem,
-                sortOrder,
-              }),
-            });
-            if (!response.ok) {
-              const payload = (await response.json().catch(() => ({}))) as { error?: string };
-              enqueueSync({
-                kind: 'wardrobe_create',
-                payload: {
-                  ...newItem,
-                  sortOrder,
-                },
-              });
-              console.warn('wardrobe POST failed (device copy kept)', payload.error ?? response.statusText);
-              showToast(
-                payload.error
-                  ? `${item.type} saved on this device. Cloud sync failed: ${payload.error}`
-                  : `${item.type} saved on this device. Cloud sync failed.`,
-                'error'
-              );
-              return;
-            }
-            const listRes = await fetch('/api/wardrobe', { credentials: 'include' });
-            if (listRes.ok) {
-              const body = (await listRes.json()) as { items?: WardrobeItem[] };
-              if (Array.isArray(body.items)) {
-                setWardrobeItems(body.items);
-                storage.setWardrobe(user.id, body.items);
-              }
-            }
-            showToast(`${item.type} added to wardrobe!`);
-          } catch (e) {
-            enqueueSync({
-              kind: 'wardrobe_create',
-              payload: {
-                ...newItem,
-                sortOrder,
-              },
-            });
-            console.warn('Cloud wardrobe sync failed (device copy kept)', e);
-            showToast(`${item.type} saved on this device. Cloud sync failed.`, 'error');
-          }
-        })();
-      }
+      nextLength = next.length;
       return next;
     });
+
     if (!SUPABASE_ON) {
       showToast(`${item.type} added to wardrobe!`);
+      return;
     }
+
+    void (async () => {
+      const sortOrder = Math.max(0, nextLength - 1);
+      try {
+        const response = await fetch('/api/wardrobe', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...newItem, sortOrder }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { error?: string };
+          console.warn('wardrobe POST failed', payload.error ?? response.statusText);
+          // Roll back: cloud is the only source of truth, so a failed save means
+          // the item never existed.
+          setWardrobeItems((prev) => prev.filter((i) => i.code !== newItem.code));
+          showToast(
+            payload.error
+              ? `Could not save ${item.type}: ${payload.error}`
+              : `Could not save ${item.type}. Try again.`,
+            'error'
+          );
+          return;
+        }
+        showToast(`${item.type} added to wardrobe!`);
+      } catch (e) {
+        console.warn('Cloud wardrobe sync failed', e);
+        setWardrobeItems((prev) => prev.filter((i) => i.code !== newItem.code));
+        showToast(`Could not save ${item.type}. Check your connection and try again.`, 'error');
+      }
+    })();
   };
 
   const handleDebugFillWardrobe = useCallback(async () => {
@@ -1458,10 +1344,7 @@ export default function App() {
         showToast('All debug seed items are already in your wardrobe');
         return;
       }
-      const next = [...prev, ...additionsLocal];
-      setWardrobeItems(next);
-      const uid = wardrobeUserIdRef.current;
-      if (uid) storage.setWardrobe(uid, next);
+      setWardrobeItems([...prev, ...additionsLocal]);
       showToast(`Added ${additionsLocal.length} debug wardrobe items`);
       return;
     }
@@ -1493,7 +1376,6 @@ export default function App() {
 
       if (toInsert.length === 0) {
         setWardrobeItems(cloud);
-        storage.setWardrobe(user.id, cloud);
         showToast('Your cloud wardrobe already includes all seed items.');
         return;
       }
@@ -1510,11 +1392,8 @@ export default function App() {
       }
       if (fresh) {
         setWardrobeItems(fresh);
-        storage.setWardrobe(user.id, fresh);
       } else {
-        const next = [...prev, ...toInsert];
-        setWardrobeItems(next);
-        storage.setWardrobe(user.id, next);
+        setWardrobeItems([...prev, ...toInsert]);
       }
       showToast(`Added ${toInsert.length} items to your cloud wardrobe`);
     } catch (e) {
