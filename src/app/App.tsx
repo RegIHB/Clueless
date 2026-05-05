@@ -27,13 +27,11 @@ import {
   fetchSavedOutfits,
   fetchWardrobe,
   insertSavedOutfit,
-  deleteSavedOutfit,
-  insertWardrobeItem,
-  deleteWardrobeItem,
   bulkInsertWardrobeItems,
   ensureProfileRow,
   updateProfile,
 } from '@/lib/supabase/sync';
+import { fetchWardrobeFromApi } from '@/lib/wardrobe-api';
 import type { Session } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
 import type { CreateTryOnJobResponse, TryOnJobSnapshot, VtoErrorCode, VtoStage } from '@/lib/vto/contracts';
@@ -48,6 +46,7 @@ const LOCAL_SAVED_OUTFITS_KEY = 'clueless_saved_outfits_v1';
 const LOCAL_SAVED_OUTFITS_USER_PREFIX = 'clueless_saved_outfits_user_v1';
 const LOCAL_TRYON_HISTORY_KEY = 'clueless_tryon_history_v1';
 const LOCAL_SELECTED_OUTFIT_KEY = 'clueless_selected_outfit_v1';
+const LOCAL_SYNC_QUEUE_KEY = 'clueless_sync_queue_v1';
 const MAX_TRYON_HISTORY = 12;
 
 type TryOnHistoryEntry = {
@@ -58,6 +57,42 @@ type TryOnHistoryEntry = {
   garmentImageUrl: string;
   garmentCode?: string;
 };
+
+type SyncQueueItem =
+  | {
+      id: string;
+      kind: 'wardrobe_create';
+      payload: WardrobeItem & { sortOrder?: number };
+      attempts: number;
+      lastError?: string;
+    }
+  | {
+      id: string;
+      kind: 'wardrobe_delete';
+      payload: { code: string };
+      attempts: number;
+      lastError?: string;
+    }
+  | {
+      id: string;
+      kind: 'favorite_create';
+      payload: {
+        localId: string;
+        tops?: WardrobeItem;
+        bottoms?: WardrobeItem;
+        accessories?: WardrobeItem;
+        savedAt: string;
+      };
+      attempts: number;
+      lastError?: string;
+    }
+  | {
+      id: string;
+      kind: 'favorite_delete';
+      payload: { id: string };
+      attempts: number;
+      lastError?: string;
+    };
 
 const VTO_STAGE_LABELS: Record<VtoStage, string> = {
   upload: 'Upload',
@@ -210,6 +245,29 @@ function mergeRemoteAndLocalSavedOutfits(remote: SavedOutfit[], local: SavedOutf
   return merged.sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime());
 }
 
+function loadSyncQueue(): SyncQueueItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_SYNC_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as SyncQueueItem[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeWardrobeCategory(raw: string): WardrobeCategory {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'tops' || normalized === 'top' || normalized === 'upper' || normalized === 'upper_body') {
+    return 'tops';
+  }
+  if (normalized === 'bottoms' || normalized === 'bottom' || normalized === 'lower' || normalized === 'lower_body') {
+    return 'bottoms';
+  }
+  return 'accessories';
+}
+
 function isPersistedOutfitId(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
@@ -272,6 +330,8 @@ export default function App() {
   const [vtoJobId, setVtoJobId] = useState<string | null>(null);
   const [vtoError, setVtoError] = useState<{ code?: VtoErrorCode; message: string } | null>(null);
   const [tryOnHistory, setTryOnHistory] = useState<TryOnHistoryEntry[]>(loadTryOnHistory);
+  const [syncQueue, setSyncQueue] = useState<SyncQueueItem[]>(loadSyncQueue);
+  const [isSyncProcessing, setIsSyncProcessing] = useState(false);
   const [tryOnPreviewUrl, setTryOnPreviewUrl] = useState<string | null>(null);
   const baseModelImg = 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1200&q=80';
   const itemsPerPage = 8;
@@ -297,6 +357,130 @@ export default function App() {
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(LOCAL_SYNC_QUEUE_KEY, JSON.stringify(syncQueue));
+    } catch {
+      // ignore storage quota issues
+    }
+  }, [syncQueue]);
+
+  const enqueueSync = useCallback((item: Omit<SyncQueueItem, 'id' | 'attempts'>) => {
+    const id =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `sync-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setSyncQueue((prev) => [...prev, { ...item, id, attempts: 0 } as SyncQueueItem]);
+  }, []);
+
+  const processSyncQueue = useCallback(async () => {
+    if (!SUPABASE_ON || isSyncProcessing || syncQueue.length === 0) return;
+    setIsSyncProcessing(true);
+    try {
+      const [current] = syncQueue;
+      if (!current) return;
+      let ok = false;
+      let persistedId: string | null = null;
+      let failureMessage = 'Sync failed';
+      if (current.kind === 'wardrobe_create') {
+        const res = await fetch('/api/wardrobe', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(current.payload),
+        });
+        ok = res.ok;
+        if (!ok) {
+          const payload = (await res.json().catch(() => ({}))) as { error?: string };
+          failureMessage = payload.error ?? failureMessage;
+        }
+      } else if (current.kind === 'wardrobe_delete') {
+        const res = await fetch(`/api/wardrobe/${encodeURIComponent(current.payload.code)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        ok = res.ok;
+        if (!ok) {
+          const payload = (await res.json().catch(() => ({}))) as { error?: string };
+          failureMessage = payload.error ?? failureMessage;
+        }
+      } else if (current.kind === 'favorite_create') {
+        const res = await fetch('/api/favorites', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tops: current.payload.tops,
+            bottoms: current.payload.bottoms,
+            accessories: current.payload.accessories,
+            savedAt: current.payload.savedAt,
+          }),
+        });
+        const payload = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+        ok = res.ok && Boolean(payload.id);
+        persistedId = payload.id ?? null;
+        if (!ok) failureMessage = payload.error ?? failureMessage;
+      } else if (current.kind === 'favorite_delete') {
+        const res = await fetch(`/api/favorites/${encodeURIComponent(current.payload.id)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        ok = res.ok;
+        if (!ok) {
+          const payload = (await res.json().catch(() => ({}))) as { error?: string };
+          failureMessage = payload.error ?? failureMessage;
+        }
+      }
+
+      if (ok) {
+        if (current.kind === 'favorite_create' && persistedId) {
+          setSavedOutfits((prev) =>
+            prev.map((o) => (o.id === current.payload.localId ? { ...o, id: persistedId } : o))
+          );
+        }
+        setSyncQueue((prev) => prev.slice(1));
+      } else {
+        setSyncQueue((prev) =>
+          prev.map((entry, idx) =>
+            idx === 0
+              ? {
+                  ...entry,
+                  attempts: entry.attempts + 1,
+                  lastError: failureMessage,
+                }
+              : entry
+          )
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setSyncQueue((prev) =>
+        prev.map((entry, idx) =>
+          idx === 0 ? { ...entry, attempts: entry.attempts + 1, lastError: message } : entry
+        )
+      );
+    } finally {
+      setIsSyncProcessing(false);
+    }
+  }, [isSyncProcessing, syncQueue]);
+
+  useEffect(() => {
+    if (!SUPABASE_ON || syncQueue.length === 0) return;
+    void processSyncQueue();
+    const interval = window.setInterval(() => {
+      void processSyncQueue();
+    }, 3500);
+    const onOnline = () => {
+      void processSyncQueue();
+    };
+    window.addEventListener('online', onOnline);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [processSyncQueue, syncQueue.length]);
 
   /**
    * `getSession()` can be briefly stale during refresh/navigation; use `getUser()` as the
@@ -361,13 +545,24 @@ export default function App() {
       else setUserSelfie(null);
     }
 
+    const loadCloudWardrobe = async (): Promise<WardrobeItem[] | null> => {
+      const direct = await fetchWardrobe(supabase, uid);
+      if (direct !== null) return direct;
+      trackAuthHydration('wardrobe_direct_fetch_null_trying_api', {});
+      const viaApi = await fetchWardrobeFromApi();
+      if (viaApi !== null) {
+        trackAuthHydration('wardrobe_loaded_via_api', { count: viaApi.length });
+      }
+      return viaApi;
+    };
+
     // Local-first wardrobe (same idea as Clueless). Distinguish "never saved" vs "user cleared closet".
     const localState = getWardrobeStorageState(uid);
     if (localState.kind === 'items') {
       setWardrobeItems(localState.items);
       trackAuthHydration('wardrobe_local_items', { count: localState.items.length });
       // Reconcile local-first edits with cloud so logout/login doesn't "lose" recent changes.
-      const cloudItems = await fetchWardrobe(supabase, uid);
+      const cloudItems = await loadCloudWardrobe();
       if (!mountedRef.current) return true;
       if (cloudItems && cloudItems.length >= 0) {
         const cloudCodes = new Set(cloudItems.map((i) => i.code));
@@ -382,7 +577,7 @@ export default function App() {
           if ('error' in insertResult) {
             console.error('wardrobe local->cloud reconcile failed', insertResult.error);
           } else {
-            const fresh = await fetchWardrobe(supabase, uid);
+            const fresh = await loadCloudWardrobe();
             if (fresh) {
               setWardrobeItems(fresh);
               storage.setWardrobe(uid, fresh);
@@ -399,21 +594,22 @@ export default function App() {
         }
       }
     } else if (localState.kind === 'empty') {
-      setWardrobeItems([]);
       trackAuthHydration('wardrobe_local_empty', {});
-      // Recovery path: if local storage was accidentally wiped but cloud has items, restore from cloud.
-      const cloudItems = await fetchWardrobe(supabase, uid);
+      // Recovery path: local [] may be stale; fetch cloud before showing an empty closet.
+      const cloudItems = await loadCloudWardrobe();
       if (!mountedRef.current) return true;
       if (cloudItems && cloudItems.length > 0) {
         setWardrobeItems(cloudItems);
         storage.setWardrobe(uid, cloudItems);
         trackAuthHydration('wardrobe_cloud_recovered', { count: cloudItems.length });
+      } else {
+        setWardrobeItems([]);
       }
     } else {
-      const items = await fetchWardrobe(supabase, uid);
+      const items = await loadCloudWardrobe();
       if (!mountedRef.current) return true;
       if (items === null) {
-        console.error('fetchWardrobe failed — wardrobe not updated');
+        console.error('wardrobe cloud load failed (client + /api/wardrobe)');
         trackAuthHydration('wardrobe_cloud_fetch_failed', {});
       } else {
         setWardrobeItems(items);
@@ -486,6 +682,8 @@ export default function App() {
     setDeletingOutfitId(null);
     setDeletingItemCode(null);
     setDebugFillLoading(false);
+    setSyncQueue([]);
+    setIsSyncProcessing(false);
   }, []);
 
   const handleAuthDialogSignedIn = useCallback(async () => {
@@ -499,9 +697,8 @@ export default function App() {
     const wState = getWardrobeStorageState(user.id);
     if (wState.kind === 'items') {
       setWardrobeItems(wState.items);
-    } else if (wState.kind === 'empty') {
-      setWardrobeItems([]);
     }
+    // `empty` / `none`: do not clear here — hydrate loads cloud first so saved rows stay visible.
     try {
       const ok = await hydrateRemoteUser(user.id);
       if (!ok) {
@@ -545,8 +742,6 @@ export default function App() {
         const wState = getWardrobeStorageState(session.user.id);
         if (wState.kind === 'items') {
           setWardrobeItems(wState.items);
-        } else if (wState.kind === 'empty') {
-          setWardrobeItems([]);
         }
         try {
           const ok = await hydrateRemoteUser(session.user.id);
@@ -700,12 +895,17 @@ export default function App() {
       savedOutfitsUserIdRef.current = user.id;
       const cached = loadSavedOutfitsForUser(user.id);
       if (cached.length > 0) setSavedOutfits(cached);
-      const list = await fetchSavedOutfits(supabase, user.id);
-      if (list === null) {
-        showToast('Could not load saved outfits. Check your connection and try again.', 'error');
+      const response = await fetch('/api/favorites', { cache: 'no-store', credentials: 'include' });
+      const payload = (await response.json().catch(() => ({}))) as {
+        favorites?: SavedOutfit[];
+        error?: string;
+      };
+      if (!response.ok || !Array.isArray(payload.favorites)) {
+        showToast(payload.error || 'Could not load saved outfits. Check your connection and try again.', 'error');
         if (cached.length > 0) setSavedOutfits(cached);
         return;
       }
+      const list = normalizeSavedOutfits(payload.favorites);
       const merged = mergeRemoteAndLocalSavedOutfits(list, cached);
       setSavedOutfits(merged);
       persistSavedOutfitsForUser(user.id, merged);
@@ -932,17 +1132,23 @@ export default function App() {
       } else {
         userIdForCache = user.id;
         savedOutfitsUserIdRef.current = user.id;
-        const inserted = await insertSavedOutfit(supabase, user.id, {
-          tops: selectedOutfit.tops,
-          bottoms: selectedOutfit.bottoms,
-          accessories: selectedOutfit.accessories,
-          savedAt,
+        const response = await fetch('/api/favorites', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tops: selectedOutfit.tops,
+            bottoms: selectedOutfit.bottoms,
+            accessories: selectedOutfit.accessories,
+            savedAt: savedAt.toISOString(),
+          }),
         });
-        if ('error' in inserted) {
-          console.warn('insertSavedOutfit failed; keeping local copy', inserted.error);
+        const payload = (await response.json().catch(() => ({}))) as { id?: string; error?: string };
+        if (!response.ok || !payload.id) {
+          console.warn('favorites POST failed; keeping local copy', payload.error ?? response.statusText);
           cloudSaveFailed = true;
         } else {
-          persistedId = inserted.id;
+          persistedId = payload.id;
         }
       }
     } catch (e) {
@@ -971,6 +1177,16 @@ export default function App() {
         const next = [optimisticOutfit, ...current.filter((o) => o.id !== optimisticOutfit.id)];
         persistSavedOutfitsForUser(userIdForCache, next);
       }
+      enqueueSync({
+        kind: 'favorite_create',
+        payload: {
+          localId: optimisticOutfit.id,
+          tops: optimisticOutfit.tops,
+          bottoms: optimisticOutfit.bottoms,
+          accessories: optimisticOutfit.accessories,
+          savedAt: optimisticOutfit.savedAt.toISOString(),
+        },
+      });
       showToast('Outfit saved on this device. Cloud sync is unavailable right now.', 'error');
     } else {
       showToast('Outfit saved successfully!');
@@ -999,18 +1215,22 @@ export default function App() {
     if (SUPABASE_ON && isPersistedOutfitId(outfit.id)) {
       setDeletingOutfitId(outfit.id);
       try {
-        const supabase = createBrowserSupabaseClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          showToast('Sign in to manage saved outfits', 'error');
-          return;
-        }
-        const ok = await deleteSavedOutfit(supabase, user.id, outfit.id);
-        if (!ok) {
-          showToast('Could not delete outfit — try again', 'error');
-          return;
+        const response = await fetch(`/api/favorites/${encodeURIComponent(outfit.id)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { error?: string };
+          enqueueSync({
+            kind: 'favorite_delete',
+            payload: { id: outfit.id },
+          });
+          showToast(
+            payload.error
+              ? `Delete queued: ${payload.error}`
+              : 'Cloud delete queued. We will retry in background.',
+            'error'
+          );
         }
       } finally {
         setDeletingOutfitId(null);
@@ -1028,18 +1248,22 @@ export default function App() {
     if (SUPABASE_ON) {
       setDeletingItemCode(item.code);
       try {
-        const supabase = createBrowserSupabaseClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          showToast('Sign in to manage your wardrobe', 'error');
-          return;
-        }
-        const ok = await deleteWardrobeItem(supabase, user.id, item.code);
-        if (!ok) {
-          showToast('Could not delete item — try again', 'error');
-          return;
+        const response = await fetch(`/api/wardrobe/${encodeURIComponent(item.code)}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { error?: string };
+          enqueueSync({
+            kind: 'wardrobe_delete',
+            payload: { code: item.code },
+          });
+          showToast(
+            payload.error
+              ? `Delete queued: ${payload.error}`
+              : 'Cloud delete queued. We will retry in background.',
+            'error'
+          );
         }
       } finally {
         setDeletingItemCode(null);
@@ -1071,7 +1295,8 @@ export default function App() {
     sourceUrl?: string;
     attribution?: string;
   }) => {
-    const prefix = item.category === 'tops' ? 'TP' : item.category === 'bottoms' ? 'BT' : 'AC';
+    const category = normalizeWardrobeCategory(item.category);
+    const prefix = category === 'tops' ? 'TP' : category === 'bottoms' ? 'BT' : 'AC';
     const suffix =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
@@ -1079,7 +1304,7 @@ export default function App() {
     const newItem: WardrobeItem = {
       code: `${prefix}-${suffix}`,
       type: item.type,
-      category: item.category as WardrobeCategory,
+      category,
       ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
       ...(item.title ? { title: item.title } : {}),
       ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
@@ -1089,11 +1314,7 @@ export default function App() {
     setWardrobeItems((prev) => {
       const next = [...prev, newItem];
       const sortOrder = next.length - 1;
-      const uidSync = wardrobeUserIdRef.current;
       if (SUPABASE_ON) {
-        if (uidSync) {
-          storage.setWardrobe(uidSync, next);
-        }
         void (async () => {
           try {
             const supabase = createBrowserSupabaseClient();
@@ -1104,19 +1325,52 @@ export default function App() {
               showToast(`${item.type} saved on this device. Sign in to sync to cloud.`, 'error');
               return;
             }
-            const result = await insertWardrobeItem(
-              supabase,
-              user.id,
-              newItem,
-              sortOrder
-            );
-            if ('error' in result) {
-              console.warn('insertWardrobeItem (device copy kept)', result.error);
-              showToast(`${item.type} saved on this device. Cloud sync failed.`, 'error');
+            wardrobeUserIdRef.current = user.id;
+            storage.setWardrobe(user.id, next);
+            const response = await fetch('/api/wardrobe', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...newItem,
+                sortOrder,
+              }),
+            });
+            if (!response.ok) {
+              const payload = (await response.json().catch(() => ({}))) as { error?: string };
+              enqueueSync({
+                kind: 'wardrobe_create',
+                payload: {
+                  ...newItem,
+                  sortOrder,
+                },
+              });
+              console.warn('wardrobe POST failed (device copy kept)', payload.error ?? response.statusText);
+              showToast(
+                payload.error
+                  ? `${item.type} saved on this device. Cloud sync failed: ${payload.error}`
+                  : `${item.type} saved on this device. Cloud sync failed.`,
+                'error'
+              );
               return;
+            }
+            const listRes = await fetch('/api/wardrobe', { credentials: 'include' });
+            if (listRes.ok) {
+              const body = (await listRes.json()) as { items?: WardrobeItem[] };
+              if (Array.isArray(body.items)) {
+                setWardrobeItems(body.items);
+                storage.setWardrobe(user.id, body.items);
+              }
             }
             showToast(`${item.type} added to wardrobe!`);
           } catch (e) {
+            enqueueSync({
+              kind: 'wardrobe_create',
+              payload: {
+                ...newItem,
+                sortOrder,
+              },
+            });
             console.warn('Cloud wardrobe sync failed (device copy kept)', e);
             showToast(`${item.type} saved on this device. Cloud sync failed.`, 'error');
           }
@@ -1161,7 +1415,10 @@ export default function App() {
         return;
       }
 
-      const cloud = await fetchWardrobe(supabase, user.id);
+      let cloud = await fetchWardrobe(supabase, user.id);
+      if (cloud === null) {
+        cloud = await fetchWardrobeFromApi();
+      }
       if (cloud === null) {
         showToast('Could not load wardrobe from the cloud. Check your connection and try again.', 'error');
         return;
@@ -1184,7 +1441,10 @@ export default function App() {
         return;
       }
 
-      const fresh = await fetchWardrobe(supabase, user.id);
+      let fresh = await fetchWardrobe(supabase, user.id);
+      if (fresh === null) {
+        fresh = await fetchWardrobeFromApi();
+      }
       if (fresh) {
         setWardrobeItems(fresh);
         storage.setWardrobe(user.id, fresh);
@@ -1472,6 +1732,15 @@ export default function App() {
   };
 
   const activeTryOnGarments = resolveTryOnGarments(selectedOutfit, selectedCategory);
+  const isBrowserOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+  const syncState: 'synced' | 'syncing' | 'retrying' | 'offline_cached' =
+    syncQueue.length === 0
+      ? 'synced'
+      : !isBrowserOnline
+        ? 'offline_cached'
+        : isSyncProcessing
+          ? 'syncing'
+          : 'retrying';
 
   const handleItemClick = (item: WardrobeItem) => {
     setSelectedOutfit(prev => ({
@@ -1616,6 +1885,26 @@ export default function App() {
           )}
         </div>
       </motion.header>
+
+      {isLoggedIn && SUPABASE_ON && (
+        <div className="fixed top-[74px] right-6 z-40">
+          <div
+            className="rounded-full px-3 py-1.5"
+            style={{ background: '#FFF', border: '2px solid #000' }}
+            title={syncQueue[0]?.lastError ?? undefined}
+          >
+            <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em' }}>
+              {syncState === 'synced'
+                ? 'SYNCED'
+                : syncState === 'syncing'
+                  ? 'SYNCING...'
+                  : syncState === 'offline_cached'
+                    ? 'OFFLINE CACHED'
+                    : 'RETRYING...'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Hero */}
       <section
