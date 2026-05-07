@@ -278,6 +278,15 @@ function wardrobeItemLabel(item: WardrobeItem | undefined): string {
   return t || item.code;
 }
 
+function findTryOnImageForOutfit(outfit: SavedOutfit, history: TryOnHistoryEntry[]): string | null {
+  const codes = new Set(
+    [outfit.tops?.code, outfit.bottoms?.code, outfit.accessories?.code].filter(Boolean)
+  );
+  if (codes.size === 0) return null;
+  const match = history.find((e) => e.garmentCode && codes.has(e.garmentCode));
+  return match?.imageUrl ?? null;
+}
+
 /** Merge saved snapshot with current wardrobe so thumbnails/titles stay up to date. */
 function hydrateSavedOutfitFromWardrobe(outfit: SavedOutfit, wardrobe: WardrobeItem[]): SavedOutfit {
   const byCode = new Map(wardrobe.map((i) => [i.code, i]));
@@ -322,6 +331,7 @@ export default function App() {
   );
   const [savedOutfitsLoading, setSavedOutfitsLoading] = useState(false);
   const [deletingOutfitId, setDeletingOutfitId] = useState<string | null>(null);
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
   const [deletingItemCode, setDeletingItemCode] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'wardrobe' | 'outfits'>('wardrobe');
   const [currentPage, setCurrentPage] = useState(0);
@@ -2994,7 +3004,9 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {savedOutfits.map((outfit) => (
+                    {savedOutfits.map((outfit) => {
+                      const tryOnUrl = findTryOnImageForOutfit(outfit, tryOnHistory);
+                      return (
                       <motion.div
                         key={outfit.id}
                         initial={false}
@@ -3007,7 +3019,13 @@ export default function App() {
                           boxShadow: '6px 6px 0 #000'
                         }}
                       >
-                        <div className="aspect-square bg-gradient-to-b from-gray-100 to-gray-200 rounded-xl mb-4 relative overflow-hidden">
+                        <div
+                          className="aspect-square bg-gradient-to-b from-gray-100 to-gray-200 rounded-xl mb-4 relative overflow-hidden"
+                          style={{ cursor: tryOnUrl ? 'pointer' : 'default' }}
+                          onClick={() => tryOnUrl && setLightboxImageUrl(tryOnUrl)}
+                          role={tryOnUrl ? 'button' : undefined}
+                          aria-label={tryOnUrl ? 'View try-on image' : undefined}
+                        >
                           <Image
                             src={userSelfie || baseModelImg}
                             alt="Model"
@@ -3040,6 +3058,15 @@ export default function App() {
                                 code={outfit.accessories.code}
                                 imageUrl={outfit.accessories.imageUrl}
                               />
+                            </div>
+                          )}
+                          {tryOnUrl && (
+                            <div
+                              className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full"
+                              style={{ background: '#000', color: '#fff', fontSize: '9px', fontWeight: 800, letterSpacing: '0.06em', pointerEvents: 'none' }}
+                            >
+                              <Sparkles className="w-2.5 h-2.5" strokeWidth={2.5} />
+                              TRY-ON
                             </div>
                           )}
                         </div>
@@ -3095,7 +3122,7 @@ export default function App() {
                           </div>
                         </div>
                       </motion.div>
-                    ))}
+                    );})}
                   </div>
                 )}
               </div>
@@ -3752,6 +3779,48 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Try-on image lightbox */}
+      <AnimatePresence>
+        {lightboxImageUrl && (
+          <motion.div
+            key="tryon-lightbox"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.88)' }}
+            onClick={() => setLightboxImageUrl(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="relative max-w-lg w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={lightboxImageUrl}
+                alt="Try-on result"
+                className="w-full rounded-2xl"
+                style={{ border: '3px solid #fff', boxShadow: '0 24px 60px rgba(0,0,0,0.6)' }}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+              <button
+                type="button"
+                onClick={() => setLightboxImageUrl(null)}
+                className="absolute -top-3 -right-3 w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ background: '#fff', border: '2px solid #000', fontSize: '14px', fontWeight: 900, lineHeight: 1 }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
