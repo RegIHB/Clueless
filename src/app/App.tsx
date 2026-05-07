@@ -684,6 +684,32 @@ export default function App() {
     if (hash.includes('type=recovery') || search.includes('type=recovery')) {
       setShowPasswordRecovery(true);
     }
+    if (search.includes('upgraded=1')) {
+      // Clean URL immediately so a refresh doesn't re-trigger.
+      const clean = window.location.pathname;
+      window.history.replaceState({}, '', clean);
+      // Poll for Pro status — webhook may arrive slightly after the redirect.
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const supabase = createBrowserSupabaseClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) { clearInterval(poll); return; }
+          const { data } = await supabase
+            .from('profiles')
+            .select('is_pro')
+            .eq('id', user.id)
+            .single();
+          if (data?.is_pro) {
+            setIsPro(true);
+            showToast('You\'re now Pro! Welcome to the main character era. ✨');
+            clearInterval(poll);
+          }
+        } catch { /* ignore */ }
+        if (attempts >= 8) clearInterval(poll); // give up after ~16s
+      }, 2000);
+    }
   }, [supabaseReady]);
 
   useEffect(() => {
@@ -3708,7 +3734,7 @@ export default function App() {
                 ) : (
                   <a
                     href={process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
-                      ? `${process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL}?checkout[custom][user_id]=${encodeURIComponent(wardrobeUserIdRef.current ?? '')}`
+                      ? `${process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL}?checkout[custom][user_id]=${encodeURIComponent(wardrobeUserIdRef.current ?? '')}&checkout[redirect_url]=${encodeURIComponent(typeof window !== 'undefined' ? `${window.location.origin}/billing/success` : '/billing/success')}`
                       : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
