@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createTryOnJob } from '@/lib/vto/jobs';
 
 const FREE_DAILY_LIMIT = 4;
-const FREE_TOTAL_LIMIT = 20;
+const FREE_MONTHLY_LIMIT = 20;
 
 function adminSupabase() {
   return createClient(
@@ -45,12 +45,11 @@ async function checkAndIncrementQuota(
 
   const { day_count, total_count } = data as { day_count: number; total_count: number };
 
-  if (total_count > FREE_TOTAL_LIMIT) {
-    // Roll back the increment we just made.
+  if (total_count > FREE_MONTHLY_LIMIT) {
     await supabase.rpc('decrement_tryon_usage', { p_user_id: userId, p_date: today });
     return {
       allowed: false,
-      reason: `You've used all ${FREE_TOTAL_LIMIT} free looks. Upgrade to Pro for unlimited try-ons.`,
+      reason: `You've used all ${FREE_MONTHLY_LIMIT} free looks this month. Upgrade to Pro for unlimited try-ons.`,
       totalUsed: total_count - 1,
     };
   }

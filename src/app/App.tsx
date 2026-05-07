@@ -2813,7 +2813,7 @@ export default function App() {
                       </div>
                       <div className="flex-1">
                         <div className="flex justify-between mb-1" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.06em', opacity: 0.55 }}>
-                          <span>{t('TOTAL LOOKS', 'TOTAL')}</span>
+                          <span>{t('THIS MONTH', 'MONTHLY')}</span>
                           <span>{tryOnQuota.totalRemaining ?? '—'} / {tryOnQuota.totalLimit ?? 20} left</span>
                         </div>
                         <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', background: 'rgba(0,0,0,0.1)' }}>
@@ -2835,7 +2835,7 @@ export default function App() {
                       <p style={{ fontSize: '11px', fontWeight: 700, marginBottom: '6px' }}>
                         {(tryOnQuota.dailyRemaining ?? 1) <= 0
                           ? t("Daily looks used up — come back tomorrow or go Pro", "Daily limit reached — upgrade for unlimited")
-                          : t("All 20 free looks used — you've had a good run 👀", "Free looks used up — upgrade for unlimited")}
+                          : t("All 20 free looks used this month — resets next month or go Pro", "Monthly free looks used up — upgrade for unlimited")}
                       </p>
                       <a
                         href={process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
@@ -3740,7 +3740,7 @@ export default function App() {
                 </div>
                 <ul className="space-y-3 mb-10 flex-1">
                   {[
-                    t('20 looks total, on us', '20 try-ons included'),
+                    t('20 looks a month, on us', '20 try-ons per month'),
                     t('4 looks a day — make them count', '4 try-ons per day'),
                     t('Full wardrobe builder', 'Full wardrobe builder'),
                     t('Basic style suggestions', 'Basic style suggestions'),
