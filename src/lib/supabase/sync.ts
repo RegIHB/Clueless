@@ -300,3 +300,39 @@ export async function deleteSavedOutfit(
   }
   return true;
 }
+
+const TRYON_BUCKET = 'try-on-results';
+
+/**
+ * Fetches a try-on image (e.g. an expiring Replicate URL) via our server-side
+ * proxy, then uploads it to Supabase Storage so it persists indefinitely.
+ * Returns the permanent public URL, or null on failure.
+ */
+export async function persistTryOnImageToStorage(
+  supabase: SupabaseClient,
+  userId: string,
+  jobId: string,
+  replicateUrl: string,
+): Promise<string | null> {
+  try {
+    const proxyUrl = `/api/persist-image?url=${encodeURIComponent(replicateUrl)}`;
+    const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(40_000) });
+    if (!response.ok) throw new Error(`Proxy ${response.status}`);
+
+    const blob = await response.blob();
+    const ext = blob.type.includes('png') ? 'png' : 'jpg';
+    const path = `${userId}/${jobId}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from(TRYON_BUCKET)
+      .upload(path, blob, { contentType: blob.type, upsert: true });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from(TRYON_BUCKET).getPublicUrl(path);
+    return data.publicUrl;
+  } catch (err) {
+    console.warn('[persistTryOnImageToStorage] failed:', err);
+    return null;
+  }
+}

@@ -29,6 +29,7 @@ import {
   bulkInsertWardrobeItems,
   ensureProfileRow,
   updateProfile,
+  persistTryOnImageToStorage,
 } from '@/lib/supabase/sync';
 import { fetchCanonicalSyncFromApi, fetchWardrobeFromApi } from '@/lib/wardrobe-api';
 import { getSessionOrchestrator, type AuthOrchestratorState } from '@/lib/auth/session-orchestrator';
@@ -1261,6 +1262,32 @@ export default function App() {
         };
         setTryOnHistory((prev) => [entry, ...prev.filter((i) => i.id !== entry.id)]);
         showToast('Try-on generated');
+
+        // Persist the Replicate URL to durable storage in the background so the
+        // image survives after Replicate's CDN link expires (~1 hour).
+        if (SUPABASE_ON) {
+          void (async () => {
+            try {
+              const supabase = createBrowserSupabaseClient();
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) return;
+              const durableUrl = await persistTryOnImageToStorage(
+                supabase,
+                user.id,
+                snapshot.jobId,
+                snapshot.imageUrl!,
+              );
+              if (durableUrl) {
+                setTryOnImageUrl((cur) => (cur === snapshot.imageUrl ? durableUrl : cur));
+                setTryOnHistory((prev) =>
+                  prev.map((e) => (e.id === snapshot.jobId ? { ...e, imageUrl: durableUrl } : e))
+                );
+              }
+            } catch (e) {
+              console.warn('[try-on persist] background upload failed', e);
+            }
+          })();
+        }
       }
       if (snapshot.status === 'failed') {
         setVtoError({
@@ -1864,8 +1891,15 @@ export default function App() {
                         }}
                         className="w-full text-left"
                       >
-                        <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-black mb-3">
-                          <Image src={tryOnHistory[0].imageUrl} alt="Most recent try-on" fill unoptimized className="object-cover" />
+                        <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-black mb-3 bg-gray-100">
+                          <Image
+                            src={tryOnHistory[0].imageUrl}
+                            alt="Most recent try-on"
+                            fill
+                            unoptimized
+                            className="object-cover"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                          />
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 700 }}>
                           {t('Re-open your latest slay', 'View your latest try-on')}
@@ -2884,7 +2918,14 @@ export default function App() {
                             className="relative aspect-[3/4] overflow-hidden rounded-lg border-2 border-black hover:opacity-90 active:opacity-80"
                             title={`Open try-on ${new Date(entry.createdAt).toLocaleString()}`}
                           >
-                            <Image src={entry.imageUrl} alt="Past try-on result" fill unoptimized className="object-cover" />
+                            <Image
+                              src={entry.imageUrl}
+                              alt="Past try-on result"
+                              fill
+                              unoptimized
+                              className="object-cover"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                            />
                           </button>
                         ))}
                       </div>
