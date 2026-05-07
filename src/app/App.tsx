@@ -3662,7 +3662,7 @@ export default function App() {
                   <p className="mt-1" style={{ fontSize: '13px', fontWeight: 500, opacity: 0.55 }}>{t('For curious babes just getting started', 'For personal use and exploration')}</p>
                 </div>
                 <div className="mb-8">
-                  <span style={{ fontSize: '48px', fontWeight: 900 }}>$0</span>
+                  <span style={{ fontSize: '48px', fontWeight: 900 }}>{'€'}0</span>
                   <span className="ml-1" style={{ fontSize: '14px', fontWeight: 600, opacity: 0.5 }}>/month</span>
                 </div>
                 <ul className="space-y-3 mb-10 flex-1">
@@ -3691,8 +3691,13 @@ export default function App() {
 
               {/* Pro Plan */}
               <div className="rounded-2xl border-4 border-black p-8 flex flex-col relative overflow-hidden" style={{ background: '#000', color: '#fff', boxShadow: '6px 6px 0 #FF69B4' }}>
-                <div className="absolute top-5 right-5 px-3 py-1 rounded-full border-2 border-white" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em' }}>
-                  {t('🔥 MOST SLAY', 'MOST POPULAR')}
+                <div className="absolute top-5 right-5 flex flex-col items-end gap-2">
+                  <span className="px-3 py-1 rounded-full border-2 border-white" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em' }}>
+                    {t('🔥 MOST SLAY', 'MOST POPULAR')}
+                  </span>
+                  <span className="px-3 py-1 rounded-full" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em', background: '#FF69B4', color: '#000' }}>
+                    {t('50% OFF RN', '50% OFF')}
+                  </span>
                 </div>
                 <div className="mb-6">
                   <p className="uppercase mb-2" style={{ fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', opacity: 0.45 }}>{t('Go Off, Queen', 'Premium')}</p>
@@ -3700,8 +3705,14 @@ export default function App() {
                   <p className="mt-1" style={{ fontSize: '13px', fontWeight: 500, opacity: 0.55 }}>{t('For the ones that never run out of drip', 'For power users and style enthusiasts')}</p>
                 </div>
                 <div className="mb-8">
-                  <span style={{ fontSize: '48px', fontWeight: 900 }}>$12</span>
-                  <span className="ml-1" style={{ fontSize: '14px', fontWeight: 600, opacity: 0.5 }}>/month</span>
+                  <div className="flex items-baseline gap-3">
+                    <span style={{ fontSize: '48px', fontWeight: 900 }}>{'€'}12</span>
+                    <span style={{ fontSize: '14px', fontWeight: 600, opacity: 0.5 }}>/month</span>
+                  </div>
+                  <p style={{ fontSize: '13px', fontWeight: 600, opacity: 0.55, marginTop: '4px' }}>
+                    <span style={{ textDecoration: 'line-through' }}>{'€'}24</span>
+                    {' '}{t('for a limited time only', 'limited time offer')}
+                  </p>
                 </div>
                 <ul className="space-y-3 mb-10 flex-1">
                   {[
