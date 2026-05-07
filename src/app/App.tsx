@@ -817,19 +817,7 @@ export default function App() {
     router.refresh();
   };
 
-  useEffect(() => {
-    if (!isLoggedIn || hasCompletedOnboarding) return;
-    if (SUPABASE_ON && !supabaseReady) return;
-    if (SUPABASE_ON) {
-      // Signed-in users: onboarding is controlled by profile.onboarding_completed.
-      setShowOnboarding(true);
-      return;
-    }
-    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-    if (!hasSeenOnboarding) {
-      setShowOnboarding(true);
-    }
-  }, [isLoggedIn, hasCompletedOnboarding, supabaseReady]);
+  // Onboarding modal disabled — removed for all users.
 
   useEffect(() => {
     if (SUPABASE_ON) return;
@@ -3527,12 +3515,7 @@ export default function App() {
 
       {/* Onboarding Flow */}
       <AnimatePresence>
-        {showOnboarding && (
-          <OnboardingFlow
-            onComplete={handleOnboardingComplete}
-            userName={userName}
-          />
-        )}
+        {false && null /* onboarding removed */}
       </AnimatePresence>
 
       {/* Upload Flow */}
