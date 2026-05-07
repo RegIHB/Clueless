@@ -545,8 +545,28 @@ export default function App() {
     if (!mountedRef.current) return true;
     if (profile) {
       setUserName(profile.display_name || 'Alex');
-      setHasCompletedOnboarding(profile.onboarding_completed);
       setUserSelfie(profile.selfie_url ?? null);
+
+      if (profile.onboarding_completed) {
+        setHasCompletedOnboarding(true);
+      } else {
+        // Only show onboarding to genuinely new accounts (created within the last 24h).
+        // Existing users who predate this feature have onboarding_completed=false in the DB;
+        // silently backfill them so they never see the modal.
+        const { data: authData } = await supabase.auth.getUser();
+        const createdAt = authData?.user?.created_at
+          ? new Date(authData.user.created_at)
+          : null;
+        const isNewAccount =
+          createdAt !== null && Date.now() - createdAt.getTime() < 24 * 60 * 60 * 1000;
+
+        if (isNewAccount) {
+          setHasCompletedOnboarding(false);
+        } else {
+          setHasCompletedOnboarding(true);
+          void updateProfile(supabase, userId, { onboarding_completed: true }).catch(() => {});
+        }
+      }
     }
 
     if (canonical) {
