@@ -307,6 +307,12 @@ export default function App() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(!SUPABASE_ON);
   const [isPro, setIsPro] = useState(false);
+  const [tryOnQuota, setTryOnQuota] = useState<{
+    dailyRemaining: number | null;
+    totalRemaining: number | null;
+    dailyLimit: number | null;
+    totalLimit: number | null;
+  } | null>(null);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [showPasswordRecovery, setShowPasswordRecovery] = useState(false);
   const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
@@ -559,6 +565,19 @@ export default function App() {
       setHasCompletedOnboarding(profile.onboarding_completed);
       setUserSelfie(profile.selfie_url ?? null);
       setIsPro(profile.is_pro ?? false);
+      if (!(profile.is_pro ?? false)) {
+        void fetch('/api/billing/quota')
+          .then((r) => r.json())
+          .then((q: { dailyRemaining?: number | null; totalRemaining?: number | null; dailyLimit?: number | null; totalLimit?: number | null }) => {
+            setTryOnQuota({
+              dailyRemaining: q.dailyRemaining ?? null,
+              totalRemaining: q.totalRemaining ?? null,
+              dailyLimit: q.dailyLimit ?? null,
+              totalLimit: q.totalLimit ?? null,
+            });
+          })
+          .catch(() => {});
+      }
     }
 
     if (canonical) {
@@ -584,6 +603,7 @@ export default function App() {
     savedOutfitsUserIdRef.current = null;
     setIsLoggedIn(false);
     setIsPro(false);
+    setTryOnQuota(null);
     setLocation('Berlin');
     setWeather({ temp: 12, condition: 'Cloudy' });
     setSavedOutfits([]);
@@ -683,6 +703,32 @@ export default function App() {
     const { hash, search } = window.location;
     if (hash.includes('type=recovery') || search.includes('type=recovery')) {
       setShowPasswordRecovery(true);
+    }
+    if (search.includes('upgraded=1')) {
+      // Clean URL immediately so a refresh doesn't re-trigger.
+      const clean = window.location.pathname;
+      window.history.replaceState({}, '', clean);
+      // Poll for Pro status — webhook may arrive slightly after the redirect.
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const supabase = createBrowserSupabaseClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) { clearInterval(poll); return; }
+          const { data } = await supabase
+            .from('profiles')
+            .select('is_pro')
+            .eq('id', user.id)
+            .single();
+          if (data?.is_pro) {
+            setIsPro(true);
+            showToast('You\'re now Pro! Welcome to the main character era. ✨');
+            clearInterval(poll);
+          }
+        } catch { /* ignore */ }
+        if (attempts >= 8) clearInterval(poll); // give up after ~16s
+      }, 2000);
     }
   }, [supabaseReady]);
 
@@ -817,19 +863,7 @@ export default function App() {
     router.refresh();
   };
 
-  useEffect(() => {
-    if (!isLoggedIn || hasCompletedOnboarding) return;
-    if (SUPABASE_ON && !supabaseReady) return;
-    if (SUPABASE_ON) {
-      // Signed-in users: onboarding is controlled by profile.onboarding_completed.
-      setShowOnboarding(true);
-      return;
-    }
-    const hasSeenOnboarding = localStorage.getItem('hasSeenOnboarding');
-    if (!hasSeenOnboarding) {
-      setShowOnboarding(true);
-    }
-  }, [isLoggedIn, hasCompletedOnboarding, supabaseReady]);
+  // Onboarding modal disabled — removed for all users.
 
   useEffect(() => {
     if (SUPABASE_ON) return;
@@ -1437,14 +1471,31 @@ export default function App() {
       const payload = (await response.json().catch(() => ({}))) as CreateTryOnJobResponse & {
         error?: string;
         details?: string;
+        code?: string;
       };
       if (!response.ok || !payload.jobId) {
-        const msg = payload.details || payload.error || `Try-on failed (${response.status})`;
-        setVtoError({ code: 'NETWORK', message: msg });
+        const msg = payload.error || payload.details || `Try-on failed (${response.status})`;
+        setVtoError({ code: payload.code === 'quota_exceeded' ? 'QUOTA' : 'NETWORK', message: msg });
         showToast(msg, 'error');
         setIsGeneratingTryOn(false);
+        // Refresh quota display after a blocked attempt.
+        if (payload.code === 'quota_exceeded') {
+          void fetch('/api/billing/quota').then((r) => r.json()).then((q: { dailyRemaining?: number | null; totalRemaining?: number | null; dailyLimit?: number | null; totalLimit?: number | null }) => {
+            setTryOnQuota({ dailyRemaining: q.dailyRemaining ?? null, totalRemaining: q.totalRemaining ?? null, dailyLimit: q.dailyLimit ?? null, totalLimit: q.totalLimit ?? null });
+          }).catch(() => {});
+        }
         return;
       }
+      // Decrement local quota optimistically.
+      setTryOnQuota((prev) =>
+        prev
+          ? {
+              ...prev,
+              dailyRemaining: prev.dailyRemaining !== null ? Math.max(0, prev.dailyRemaining - 1) : null,
+              totalRemaining: prev.totalRemaining !== null ? Math.max(0, prev.totalRemaining - 1) : null,
+            }
+          : prev
+      );
       setVtoJobId(payload.jobId);
       await watchTryOnJob(payload.jobId);
     } catch (e) {
@@ -2742,12 +2793,70 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Quota indicator — free users only */}
+                  {!isPro && tryOnQuota && isLoggedIn && (
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="flex justify-between mb-1" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.06em', opacity: 0.55 }}>
+                          <span>{t('LOOKS TODAY', 'DAILY')}</span>
+                          <span>{tryOnQuota.dailyRemaining ?? '—'} / {tryOnQuota.dailyLimit ?? 4} left</span>
+                        </div>
+                        <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', background: 'rgba(0,0,0,0.1)' }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${Math.max(0, Math.min(100, ((tryOnQuota.dailyRemaining ?? 0) / (tryOnQuota.dailyLimit ?? 4)) * 100))}%`,
+                              background: (tryOnQuota.dailyRemaining ?? 0) <= 1 ? '#EF4444' : '#000',
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between mb-1" style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.06em', opacity: 0.55 }}>
+                          <span>{t('THIS MONTH', 'MONTHLY')}</span>
+                          <span>{tryOnQuota.totalRemaining ?? '—'} / {tryOnQuota.totalLimit ?? 20} left</span>
+                        </div>
+                        <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', background: 'rgba(0,0,0,0.1)' }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${Math.max(0, Math.min(100, ((tryOnQuota.totalRemaining ?? 0) / (tryOnQuota.totalLimit ?? 20)) * 100))}%`,
+                              background: (tryOnQuota.totalRemaining ?? 0) <= 3 ? '#EF4444' : '#000',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Upgrade nudge when quota is exhausted */}
+                  {!isPro && tryOnQuota !== null && isLoggedIn && ((tryOnQuota.dailyRemaining ?? 1) <= 0 || (tryOnQuota.totalRemaining ?? 1) <= 0) && (
+                    <div className="mb-2 rounded-xl p-3 text-center" style={{ background: '#000', color: '#fff' }}>
+                      <p style={{ fontSize: '11px', fontWeight: 700, marginBottom: '6px' }}>
+                        {(tryOnQuota.dailyRemaining ?? 1) <= 0
+                          ? t("Daily looks used up — come back tomorrow or go Pro", "Daily limit reached — upgrade for unlimited")
+                          : t("All 20 free looks used this month — resets next month or go Pro", "Monthly free looks used up — upgrade for unlimited")}
+                      </p>
+                      <a
+                        href={process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
+                          ? `${process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL}?checkout[custom][user_id]=${encodeURIComponent(wardrobeUserIdRef.current ?? '')}&checkout[redirect_url]=${encodeURIComponent(typeof window !== 'undefined' ? `${window.location.origin}/billing/success` : '/billing/success')}`
+                          : '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block px-4 py-1.5 rounded-full"
+                        style={{ background: '#FF69B4', color: '#000', fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}
+                      >
+                        {t('GO PRO — €3/mo', 'UPGRADE TO PRO — €3/mo')}
+                      </a>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <motion.button
                       whileHover={{ scale: 1.02, y: -1 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={handleTryOn}
-                      disabled={isGeneratingTryOn || !userSelfie || activeTryOnGarments.length === 0}
+                      disabled={isGeneratingTryOn || !userSelfie || activeTryOnGarments.length === 0 || (!isPro && tryOnQuota !== null && ((tryOnQuota.dailyRemaining ?? 1) <= 0 || (tryOnQuota.totalRemaining ?? 1) <= 0))}
                       className="w-full py-3 px-4 rounded-full text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{
                         background: '#000',
@@ -3527,12 +3636,7 @@ export default function App() {
 
       {/* Onboarding Flow */}
       <AnimatePresence>
-        {showOnboarding && (
-          <OnboardingFlow
-            onComplete={handleOnboardingComplete}
-            userName={userName}
-          />
-        )}
+        {false && null /* onboarding removed */}
       </AnimatePresence>
 
       {/* Upload Flow */}
@@ -3636,7 +3740,7 @@ export default function App() {
                 </div>
                 <ul className="space-y-3 mb-10 flex-1">
                   {[
-                    t('20 looks total, on us', '20 try-ons included'),
+                    t('20 looks a month, on us', '20 try-ons per month'),
                     t('4 looks a day — make them count', '4 try-ons per day'),
                     t('Full wardrobe builder', 'Full wardrobe builder'),
                     t('Basic style suggestions', 'Basic style suggestions'),
@@ -3714,7 +3818,7 @@ export default function App() {
                       onClick={async () => {
                         const res = await fetch('/api/billing/portal');
                         const json = await res.json() as { url?: string };
-                        if (json.url) window.open(json.url, '_blank');
+                        if (json.url) window.location.href = json.url;
                       }}
                       className="w-full py-2 rounded-xl border border-white/40 font-bold hover:border-white/80 transition-all duration-200"
                       style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', opacity: 0.6 }}
@@ -3725,7 +3829,7 @@ export default function App() {
                 ) : (
                   <a
                     href={process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
-                      ? `${process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL}?checkout[custom][user_id]=${encodeURIComponent(wardrobeUserIdRef.current ?? '')}`
+                      ? `${process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL}?checkout[custom][user_id]=${encodeURIComponent(wardrobeUserIdRef.current ?? '')}&checkout[redirect_url]=${encodeURIComponent(typeof window !== 'undefined' ? `${window.location.origin}/billing/success` : '/billing/success')}`
                       : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
