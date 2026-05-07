@@ -1,6 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createClient } from '@supabase/supabase-js';
 import { createTryOnJob } from '@/lib/vto/jobs';
+
+const FREE_DAILY_LIMIT = 4;
+const FREE_TOTAL_LIMIT = 20;
+
+function adminSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+}
+
+/** Returns { allowed, reason } — also increments counter when allowed. */
+async function checkAndIncrementQuota(
+  userId: string,
+): Promise<{ allowed: true } | { allowed: false; reason: string; dailyUsed?: number; totalUsed?: number }> {
+  const supabase = adminSupabase();
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // Check Pro status first — Pro users skip all limits.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_pro')
+    .eq('id', userId)
+    .single();
+
+  if (profile?.is_pro) return { allowed: true };
+
+  // Upsert today's row and increment atomically via RPC.
+  // We use a raw SQL upsert via rpc to avoid race conditions.
+  const { data, error } = await supabase.rpc('increment_tryon_usage', {
+    p_user_id: userId,
+    p_date: today,
+  });
+
+  if (error) {
+    console.error('[try-on quota] rpc error', error);
+    // Fail open — don't block try-on if quota check errors.
+    return { allowed: true };
+  }
+
+  const { day_count, total_count } = data as { day_count: number; total_count: number };
+
+  if (total_count > FREE_TOTAL_LIMIT) {
+    // Roll back the increment we just made.
+    await supabase.rpc('decrement_tryon_usage', { p_user_id: userId, p_date: today });
+    return {
+      allowed: false,
+      reason: `You've used all ${FREE_TOTAL_LIMIT} free looks. Upgrade to Pro for unlimited try-ons.`,
+      totalUsed: total_count - 1,
+    };
+  }
+
+  if (day_count > FREE_DAILY_LIMIT) {
+    await supabase.rpc('decrement_tryon_usage', { p_user_id: userId, p_date: today });
+    return {
+      allowed: false,
+      reason: `You've hit the daily limit of ${FREE_DAILY_LIMIT} looks. Come back tomorrow or upgrade to Pro.`,
+      dailyUsed: day_count - 1,
+    };
+  }
+
+  return { allowed: true };
+}
 
 const tryOnSchema = z.object({
   personImageUrl: z.string().min(1),
@@ -36,6 +101,23 @@ export async function POST(request: NextRequest) {
     const parsed = tryOnSchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
+    // Quota check — only when Supabase + service role key are configured.
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const { createServerSupabaseClient } = await import('@/lib/supabase/server');
+      const supabase = await createServerSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        const quota = await checkAndIncrementQuota(user.id);
+        if (!quota.allowed) {
+          return NextResponse.json(
+            { error: quota.reason, code: 'quota_exceeded' },
+            { status: 429 },
+          );
+        }
+      }
     }
 
     const garments =

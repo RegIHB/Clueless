@@ -8,6 +8,7 @@ export type VtoErrorCode =
   | 'PROVIDER'
   | 'BILLING'
   | 'TIMEOUT'
+  | 'QUOTA'
   | 'UNKNOWN';
 
 export interface TryOnGarmentInput {
