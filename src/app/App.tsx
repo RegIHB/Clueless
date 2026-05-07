@@ -2829,6 +2829,28 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Upgrade nudge when quota is exhausted */}
+                  {!isPro && tryOnQuota !== null && isLoggedIn && ((tryOnQuota.dailyRemaining ?? 1) <= 0 || (tryOnQuota.totalRemaining ?? 1) <= 0) && (
+                    <div className="mb-2 rounded-xl p-3 text-center" style={{ background: '#000', color: '#fff' }}>
+                      <p style={{ fontSize: '11px', fontWeight: 700, marginBottom: '6px' }}>
+                        {(tryOnQuota.dailyRemaining ?? 1) <= 0
+                          ? t("Daily looks used up — come back tomorrow or go Pro", "Daily limit reached — upgrade for unlimited")
+                          : t("All 20 free looks used — you've had a good run 👀", "Free looks used up — upgrade for unlimited")}
+                      </p>
+                      <a
+                        href={process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
+                          ? `${process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL}?checkout[custom][user_id]=${encodeURIComponent(wardrobeUserIdRef.current ?? '')}&checkout[redirect_url]=${encodeURIComponent(typeof window !== 'undefined' ? `${window.location.origin}/billing/success` : '/billing/success')}`
+                          : '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block px-4 py-1.5 rounded-full"
+                        style={{ background: '#FF69B4', color: '#000', fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}
+                      >
+                        {t('GO PRO — €3/mo', 'UPGRADE TO PRO — €3/mo')}
+                      </a>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <motion.button
                       whileHover={{ scale: 1.02, y: -1 }}
@@ -3796,7 +3818,7 @@ export default function App() {
                       onClick={async () => {
                         const res = await fetch('/api/billing/portal');
                         const json = await res.json() as { url?: string };
-                        if (json.url) window.open(json.url, '_blank');
+                        if (json.url) window.location.href = json.url;
                       }}
                       className="w-full py-2 rounded-xl border border-white/40 font-bold hover:border-white/80 transition-all duration-200"
                       style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', opacity: 0.6 }}

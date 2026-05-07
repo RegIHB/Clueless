@@ -103,20 +103,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
-    // Quota check — only when Supabase + service role key are configured.
+    // Auth + quota check — only when Supabase is configured.
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       const { createServerSupabaseClient } = await import('@/lib/supabase/server');
       const supabase = await createServerSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
 
-      if (user) {
-        const quota = await checkAndIncrementQuota(user.id);
-        if (!quota.allowed) {
-          return NextResponse.json(
-            { error: quota.reason, code: 'quota_exceeded' },
-            { status: 429 },
-          );
-        }
+      if (!user) {
+        return NextResponse.json(
+          { error: 'Sign in to run a try-on.', code: 'unauthenticated' },
+          { status: 401 },
+        );
+      }
+
+      const quota = await checkAndIncrementQuota(user.id);
+      if (!quota.allowed) {
+        return NextResponse.json(
+          { error: quota.reason, code: 'quota_exceeded' },
+          { status: 429 },
+        );
       }
     }
 
