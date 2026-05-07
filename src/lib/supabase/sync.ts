@@ -6,6 +6,7 @@ type ProfileRow = {
   display_name: string;
   onboarding_completed: boolean;
   selfie_url: string | null;
+  is_pro: boolean;
 };
 
 type WardrobeRow = {
@@ -48,7 +49,7 @@ export async function fetchProfile(
 ): Promise<ProfileRow | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, display_name, onboarding_completed, selfie_url')
+    .select('id, display_name, onboarding_completed, selfie_url, is_pro')
     .eq('id', userId)
     .maybeSingle();
 
