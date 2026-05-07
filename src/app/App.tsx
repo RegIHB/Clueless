@@ -35,7 +35,7 @@ import { getSessionOrchestrator, type AuthOrchestratorState } from '@/lib/auth/s
 import type { Session } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
 import type { CreateTryOnJobResponse, TryOnJobSnapshot, VtoErrorCode, VtoStage } from '@/lib/vto/contracts';
-import { getVtoCopy } from '@/lib/vto/copy';
+import { vtoCopy } from '@/lib/vto/copy';
 
 const SUPABASE_ON = isSupabaseConfigured();
 const AUTH_HYDRATION_TELEMETRY =
@@ -341,10 +341,6 @@ export default function App() {
   const itemsPerPage = 8;
   const [userName, setUserName] = useState('Alex');
   const [supabaseReady, setSupabaseReady] = useState(!SUPABASE_ON);
-  const [langMode, setLangMode] = useState<'slang' | 'english'>(() => {
-    if (typeof window === 'undefined') return 'slang';
-    return (localStorage.getItem('clueless_lang_mode') as 'slang' | 'english') ?? 'slang';
-  });
 
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
   const estimatedHoursSaved = Math.max(
@@ -355,9 +351,6 @@ export default function App() {
   const outfitRepeatsAvoided = Math.max(0, savedOutfits.length - 1);
   const mirrorMinutesSaved = savedOutfits.length * 7 + tryOnHistory.length * 3;
   const weatherFaceoffsWon = Math.max(1, Math.round(tryOnHistory.length * 0.7));
-
-  const copy = getVtoCopy(langMode === 'slang' ? 'playful' : 'minimal');
-  const t = (slang: string, english: string) => langMode === 'slang' ? slang : english;
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     if (type === 'error') sonnerToast.error(message);
@@ -1042,7 +1035,7 @@ export default function App() {
       wardrobeItemLabel(outfit.bottoms) ||
       wardrobeItemLabel(outfit.accessories) ||
       'this outfit';
-    if (!window.confirm(`Remove "${label}" from saved outfits? This cannot be undone.`)) return;
+    if (!window.confirm(`Remove “${label}” from saved outfits? This cannot be undone.`)) return;
 
     if (SUPABASE_ON && isPersistedOutfitId(outfit.id)) {
       setDeletingOutfitId(outfit.id);
@@ -1075,7 +1068,7 @@ export default function App() {
 
   const handleDeleteWardrobeItem = async (item: WardrobeItem) => {
     const label = wardrobeItemLabel(item) || item.type;
-    if (!window.confirm(`Remove "${label}" from your wardrobe? This cannot be undone.`)) return;
+    if (!window.confirm(`Remove “${label}” from your wardrobe? This cannot be undone.`)) return;
 
     if (SUPABASE_ON) {
       setDeletingItemCode(item.code);
@@ -1210,12 +1203,12 @@ export default function App() {
     if (isGeneratingTryOn || tryOnImageUrl) return;
     if (!userSelfie) {
       setVtoStage('upload');
-      setVtoStatusMessage(copy.idleUpload);
+      setVtoStatusMessage(vtoCopy.idleUpload);
       setVtoProgress(0);
       return;
     }
     setVtoStage('validation');
-    setVtoStatusMessage(copy.idlePick);
+    setVtoStatusMessage(vtoCopy.idlePick);
     setVtoProgress(5);
   }, [userSelfie, tryOnImageUrl, isGeneratingTryOn]);
 
@@ -1356,7 +1349,7 @@ export default function App() {
     const selectedGarments = resolveTryOnGarments(selectedOutfit, selectedCategory);
     if (!userSelfie) {
       setVtoStage('upload');
-      setVtoStatusMessage(copy.needPhoto);
+      setVtoStatusMessage(vtoCopy.needPhoto);
       showToast('Upload your photo first', 'error');
       return;
     }
@@ -1383,7 +1376,7 @@ export default function App() {
     setVtoStage('validation');
     setVtoProgress(8);
     const garmentCodes = garmentsForRequest.map((entry) => entry.item.code).join(', ');
-    setVtoStatusMessage(copy.validatingSelected(garmentCodes));
+    setVtoStatusMessage(vtoCopy.validatingSelected(garmentCodes));
 
     const personValidation = await validateImageBeforeTryOn(userSelfie, 'person');
     if (personValidation) {
@@ -1405,7 +1398,7 @@ export default function App() {
       setIsGeneratingTryOn(true);
       setVtoStage('processing');
       setVtoProgress(12);
-      setVtoStatusMessage(copy.submittingSelected(garmentsForRequest.length));
+      setVtoStatusMessage(vtoCopy.submittingSelected(garmentsForRequest.length));
       const response = await fetch('/api/try-on', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1767,20 +1760,20 @@ export default function App() {
                         textTransform: 'uppercase',
                       }}
                     >
-                      {t('Your outfit command center', 'Your outfit dashboard')}
+                      Your outfit command center
                     </h1>
                     <p className="mb-5 max-w-[56ch] text-pretty" style={{ fontSize: '14px', lineHeight: 1.6, fontWeight: 500, opacity: 0.78 }}>
-                      {t('Pick a vibe, tap a piece, and let AI do the closet overthinking. Fewer outfit spirals, more walking out the door.', 'Select items from your wardrobe and let AI style them for you. Less time deciding, more time getting dressed.')}
+                      Pick a vibe, tap a piece, and let AI do the closet overthinking. Fewer outfit spirals, more walking out the door.
                     </p>
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
                       {[
-                        { label: t('CLOSET PIECES', 'WARDROBE ITEMS'), value: wardrobeItems.length },
-                        { label: t('LOOKS LOCKED', 'SAVED OUTFITS'), value: savedOutfits.length },
-                        { label: t('FIT CHECKS', 'TRY-ONS'), value: tryOnHistory.length },
-                        { label: t('HOURS RECLAIMED', 'HOURS SAVED'), value: `${estimatedHoursSaved}h` },
-                        { label: t('PANIC MOMENTS AVOIDED', 'DECISIONS MADE'), value: stylePanicMomentsPrevented },
-                        { label: t('WEATHER WINS', 'WEATHER OUTFITS'), value: weatherFaceoffsWon },
+                        { label: 'CLOSET PIECES', value: wardrobeItems.length },
+                        { label: 'LOOKS LOCKED', value: savedOutfits.length },
+                        { label: 'FIT CHECKS', value: tryOnHistory.length },
+                        { label: 'HOURS RECLAIMED', value: `${estimatedHoursSaved}h` },
+                        { label: 'PANIC MOMENTS AVOIDED', value: stylePanicMomentsPrevented },
+                        { label: 'WEATHER WINS', value: weatherFaceoffsWon },
                       ].map((kpi) => (
                         <div
                           key={kpi.label}
@@ -1793,7 +1786,7 @@ export default function App() {
                       ))}
                     </div>
                     <p style={{ fontSize: '11px', fontWeight: 600, opacity: 0.65 }}>
-                      {t(`Roughly ${mirrorMinutesSaved} mirror minutes saved and ${outfitRepeatsAvoided} outfit repeats dodged. Science-ish, but accurate enough.`, `Estimated ${mirrorMinutesSaved} minutes saved and ${outfitRepeatsAvoided} outfit repeats avoided.`)}
+                      Roughly {mirrorMinutesSaved} mirror minutes saved and {outfitRepeatsAvoided} outfit repeats dodged. Science-ish, but accurate enough.
                     </p>
 
                     <div className="flex items-center flex-wrap gap-3">
@@ -1806,7 +1799,7 @@ export default function App() {
                         className="px-6 py-3 rounded-full text-white inline-flex items-center gap-2"
                         style={{ background: '#000', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
                       >
-                        {t('MAKE ME LOOK EXPENSIVE', 'OPEN MY WARDROBE')}
+                        MAKE ME LOOK EXPENSIVE
                         <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
                       </button>
                       <button
@@ -1815,7 +1808,7 @@ export default function App() {
                         className="px-6 py-3 rounded-full inline-flex items-center gap-2"
                         style={{ background: '#FFF', border: '2px solid #000', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
                       >
-                        {t('OPEN MY HITS', 'VIEW SAVED OUTFITS')}
+                        OPEN MY HITS
                       </button>
                     </div>
                   </div>
@@ -1826,7 +1819,7 @@ export default function App() {
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.7 }}>
-                        {t('LAST LOOK ENERGY', 'RECENT TRY-ON')}
+                        LAST LOOK ENERGY
                       </span>
                       {isGeneratingTryOn && (
                         <span style={{ fontSize: '10px', fontWeight: 700 }}>
@@ -1848,7 +1841,7 @@ export default function App() {
                           <Image src={tryOnHistory[0].imageUrl} alt="Most recent try-on" fill unoptimized className="object-cover" />
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 700 }}>
-                          {t('Re-open your latest slay', 'View your latest try-on')}
+                          Re-open your latest slay
                         </div>
                         <div style={{ fontSize: '11px', fontWeight: 500, opacity: 0.7 }}>
                           {new Date(tryOnHistory[0].createdAt).toLocaleString()}
@@ -1860,10 +1853,10 @@ export default function App() {
                         style={{ background: '#FFE5F1', border: '2px solid #000' }}
                       >
                         <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: 4 }}>
-                          {t('No fashion experiments yet', 'No try-ons yet')}
+                          No fashion experiments yet
                         </div>
                         <div style={{ fontSize: '11px', fontWeight: 500, opacity: 0.75 }}>
-                          {t('Pick an item below and launch your first AI style test.', 'Select an item below to start your first AI try-on.')}
+                          Pick an item below and launch your first AI style test.
                         </div>
                       </div>
                     )}
@@ -1900,7 +1893,7 @@ export default function App() {
                 className="mb-5 md:mb-6 tracking-[0.22em] uppercase mx-auto max-w-xl"
                 style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(0,0,0,0.55)' }}
               >
-                {t('Digital wardrobe · AI stylist', 'Digital wardrobe · AI styling assistant')}
+                Digital wardrobe · AI stylist
               </motion.p>
             )}
 
@@ -1935,13 +1928,11 @@ export default function App() {
               }}
             >
               {isLoggedIn ? (
-                <>{t('Your wardrobe, reimagined. AI-powered outfit suggestions from what you already own.', 'AI-powered outfit suggestions based on your existing wardrobe.')}</>
+                <>Your wardrobe, reimagined. AI-powered outfit suggestions from what you already own.</>
               ) : (
                 <>
-                  {t(
-                    'Stop staring at the closet. Clueless remembers what you own, respects the weather, and helps you build outfits in seconds—then chats with you like a stylist who actually knows your rail.',
-                    'Clueless remembers what you own, accounts for the weather, and helps you build outfits quickly — then chats with you like a personal stylist.'
-                  )}
+                  Stop staring at the closet. Clueless remembers what you own, respects the weather, and helps you
+                  build outfits in seconds—then chats with you like a stylist who actually knows your rail.
                 </>
               )}
             </motion.p>
@@ -2019,7 +2010,7 @@ export default function App() {
                   }}
                 >
                   <Sparkles className="w-4 h-4" strokeWidth={2.5} />
-                  <span>{t('ASK AI STYLIST', 'OPEN AI STYLIST')}</span>
+                  <span>ASK AI STYLIST</span>
                 </motion.button>
               )}
             </div>
@@ -2038,18 +2029,18 @@ export default function App() {
                 {[
                   {
                     kicker: '01',
-                    title: t('Own less chaos', 'Organise your wardrobe'),
-                    body: t(`Add pieces from search or upload. One closet, always sorted by category — no more "where did I put that?"`, 'Add items from search or upload. Everything sorted by category in one place.'),
+                    title: 'Own less chaos',
+                    body: 'Add pieces from search or upload. One closet, always sorted by category—no more “where did I put that?”',
                   },
                   {
                     kicker: '02',
-                    title: t('Dress for the day', 'Dress for the occasion'),
-                    body: t("When you're signed in, we fold in your location and forecast so suggestions feel sensible, not random.", 'When signed in, we factor in your location and forecast so suggestions are appropriate, not generic.'),
+                    title: 'Dress for the day',
+                    body: 'When you’re signed in, we fold in your location and forecast so suggestions feel sensible, not random.',
                   },
                   {
                     kicker: '03',
-                    title: t('Chat with your rail', 'Chat with your stylist'),
-                    body: t('The stylist reasons over what you actually own — mix, match, and save outfits without leaving the app.', 'The AI works from your actual wardrobe — mix, match, and save outfits without leaving the app.'),
+                    title: 'Chat with your rail',
+                    body: 'The stylist reasons over what you actually own—mix, match, and save outfits without leaving the app.',
                   },
                 ].map((card, idx) => (
                   <motion.div
@@ -2109,13 +2100,13 @@ export default function App() {
               letterSpacing: '-0.02em',
               textTransform: 'uppercase'
             }}>
-              {isLoggedIn ? t('AI-POWERED OUTFIT RECOMMENDATIONS', 'AI-POWERED OUTFIT RECOMMENDATIONS') : t('OUTFITS THAT FIT YOUR REAL LIFE', 'OUTFITS BUILT FOR YOUR LIFESTYLE')}
+              {isLoggedIn ? 'AI-POWERED OUTFIT RECOMMENDATIONS' : 'OUTFITS THAT FIT YOUR REAL LIFE'}
             </h2>
             <p className={`max-w-[640px] mx-auto text-pretty ${isLoggedIn ? 'mb-8' : 'mb-2'}`} style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'rgba(0,0,0,0.78)' }}>
               {isLoggedIn ? (
-                <>{t("Just tell us what you're doing today. Our AI considers your location, weather, personal style, and occasion to suggest the perfect outfit.", "Describe your day and our AI will factor in your location, weather, and personal style to recommend the right outfit.")}</>
+                <>Just tell us what you&apos;re doing today. Our AI considers your location, weather, personal style, and occasion to suggest the perfect outfit.</>
               ) : (
-                <>{t('Sign in and the app learns your closet, the weather where you are, and how you like to dress—so recommendations feel specific, not generic.', 'Sign in and the app learns your wardrobe, your location, and your style preferences — so recommendations feel relevant, not random.')}</>
+                <>Sign in and the app learns your closet, the weather where you are, and how you like to dress—so recommendations feel specific, not generic.</>
               )}
             </p>
           </motion.div>
@@ -2125,24 +2116,24 @@ export default function App() {
             {[
               {
                 icon: <MapPin className="w-6 h-6" strokeWidth={2.5} />,
-                title: isLoggedIn ? 'LOCATION AWARE' : t('WHERE YOU ARE', 'LOCATION-BASED'),
+                title: isLoggedIn ? 'LOCATION AWARE' : 'WHERE YOU ARE',
                 description: isLoggedIn
-                  ? t('Weather-appropriate suggestions based on your current location and forecast', 'Weather-appropriate suggestions based on your current location and forecast')
-                  : t("After sign-in, forecasts and plans stay in sync so you're not caught in the wrong layer.", 'After sign-in, your location and forecast inform every suggestion.'),
+                  ? 'Weather-appropriate suggestions based on your current location and forecast'
+                  : 'After sign-in, forecasts and plans stay in sync so you’re not caught in the wrong layer.',
               },
               {
                 icon: <Sparkles className="w-6 h-6" strokeWidth={2.5} />,
-                title: isLoggedIn ? 'SMART STYLING' : t('YOUR PIECES, FIRST', 'YOUR WARDROBE FIRST'),
+                title: isLoggedIn ? 'SMART STYLING' : 'YOUR PIECES, FIRST',
                 description: isLoggedIn
-                  ? t("AI learns your style from saved outfits and suggests looks you'll love", "AI learns your style from saved outfits and suggests outfits you'll enjoy")
-                  : t("Suggestions pull from what you've added — no fantasy closet full of things you don't own.", "Suggestions are based on what you've added — nothing you don't own."),
+                  ? "AI learns your style from saved outfits and suggests looks you'll love"
+                  : 'Suggestions pull from what you’ve added—no fantasy closet full of things you don’t own.',
               },
               {
                 icon: <MessageCircle className="w-6 h-6" strokeWidth={2.5} />,
-                title: isLoggedIn ? 'CONVERSATIONAL' : t('NATURAL CHAT', 'PLAIN LANGUAGE CHAT'),
+                title: isLoggedIn ? 'CONVERSATIONAL' : 'NATURAL CHAT',
                 description: isLoggedIn
-                  ? t('Chat naturally about your day and get instant outfit recommendations', 'Describe your day and receive instant outfit recommendations')
-                  : t('Describe your day in plain language; the stylist answers with combinations you can actually wear.', 'Describe your plans in plain language; the AI responds with combinations from your wardrobe.'),
+                  ? 'Chat naturally about your day and get instant outfit recommendations'
+                  : 'Describe your day in plain language; the stylist answers with combinations you can actually wear.',
               }
             ].map((feature, idx) => (
               <motion.div
@@ -2194,7 +2185,7 @@ export default function App() {
               border: '2px solid #000'
             }}>
               <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em' }}>
-                {t('TRY ASKING', 'EXAMPLE PROMPTS')}
+                TRY ASKING
               </span>
             </div>
 
@@ -2238,7 +2229,7 @@ export default function App() {
               }}
             >
               <Sparkles className="w-5 h-5" strokeWidth={2.5} />
-              <span>{t('TALK TO AI STYLIST', 'OPEN AI STYLIST')}</span>
+              <span>TALK TO AI STYLIST</span>
             </motion.button>
           </motion.div>
           )}
@@ -2263,13 +2254,13 @@ export default function App() {
               letterSpacing: '-0.02em',
               textTransform: 'uppercase'
             }}>
-              {isLoggedIn ? t('YOUR TRY-ON WORKSPACE', 'YOUR TRY-ON WORKSPACE') : t('BUILD YOUR DIGITAL WARDROBE', 'BUILD YOUR DIGITAL WARDROBE')}
+              {isLoggedIn ? 'YOUR TRY-ON WORKSPACE' : 'BUILD YOUR DIGITAL WARDROBE'}
             </h2>
             <p className="max-w-[640px] mx-auto text-pretty" style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'rgba(0,0,0,0.78)' }}>
               {isLoggedIn ? (
-                <>{t('Your wardrobe takes priority here: select items, preview instantly, and run try-ons without distractions.', 'Select items from your wardrobe, preview them instantly, and run try-ons without distractions.')}</>
+                <>Your wardrobe takes priority here: select items, preview instantly, and run try-ons without distractions.</>
               ) : (
-                <>{t("One place for everything you wear. See it, combine it, save looks you love — then come back when you're rushing out the door.", 'One place for everything you wear. View it, combine it, save outfits you like — and revisit them anytime.')}</>
+                <>One place for everything you wear. See it, combine it, save looks you love—then come back when you’re rushing out the door.</>
               )}
             </p>
           </motion.div>
@@ -2303,13 +2294,13 @@ export default function App() {
                     ) : (
                       <div className="text-center py-14 md:py-20 px-6 sm:px-10 max-w-lg mx-auto">
                         <p className="mb-2 tracking-[0.14em] uppercase" style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(0,0,0,0.45)' }}>
-                          {t('Members only', 'Sign in required')}
+                          Members only
                         </p>
                         <h3 className="mb-4" style={{ fontSize: 'clamp(22px, 4vw, 28px)', fontWeight: 900, letterSpacing: '-0.02em' }}>
-                          {t('Unlock your closet', 'Create a free account')}
+                          Unlock your closet
                         </h3>
                         <p className="mb-8" style={{ fontSize: '15px', lineHeight: 1.65, fontWeight: 500, color: 'rgba(0,0,0,0.72)' }}>
-                          {t('Create a free account to add pieces, run try-ons, save outfits, and chat with the stylist using your real wardrobe.', 'Create a free account to add items, run try-ons, save outfits, and get AI styling advice based on your actual wardrobe.')}
+                          Create a free account to add pieces, run try-ons, save outfits, and chat with the stylist using your real wardrobe.
                         </p>
                         <button
                           type="button"
@@ -2745,7 +2736,7 @@ export default function App() {
                     >
                       {isGeneratingTryOn
                         ? `${Math.round(vtoProgress)}%`
-                        : t('COOK A TRY-ON', 'RUN TRY-ON')}
+                        : 'COOK A TRY-ON'}
                     </motion.button>
 
                     <motion.button
@@ -2763,7 +2754,7 @@ export default function App() {
                       }}
                     >
                       <RotateCcw className="w-4 h-4" strokeWidth={2.5} />
-                      {t('ONE MORE FOR SCIENCE', 'TRY AGAIN')}
+                      ONE MORE FOR SCIENCE
                     </motion.button>
 
                     <motion.button
@@ -2785,7 +2776,7 @@ export default function App() {
                       }}
                     >
                       <Heart className="w-4 h-4" strokeWidth={2.5} />
-                      {t('LOCK THIS LOOK', 'SAVE OUTFIT')}
+                      LOCK THIS LOOK
                     </motion.button>
 
                     <motion.button
@@ -2803,7 +2794,7 @@ export default function App() {
                       type="button"
                     >
                       <Camera className="w-4 h-4" strokeWidth={2.5} />
-                      {t('NEW FACE CARD', 'CHANGE PHOTO')}
+                      NEW FACE CARD
                     </motion.button>
 
                     {tryOnImageUrl && (
@@ -2821,7 +2812,7 @@ export default function App() {
                         }}
                       >
                         <Download className="w-4 h-4" strokeWidth={2.5} />
-                        {t('EXPORT RECEIPTS', 'SAVE IMAGE')}
+                        EXPORT RECEIPTS
                       </a>
                     )}
 
@@ -2838,7 +2829,7 @@ export default function App() {
                         letterSpacing: '0.1em'
                       }}
                     >
-                      {t('RESET THE CHAOS', 'CLEAR SELECTION')}
+                      RESET THE CHAOS
                     </motion.button>
                   </div>
 
@@ -2846,7 +2837,7 @@ export default function App() {
                     <div className="mt-5">
                       <div className="mb-2 flex items-center justify-between">
                         <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em' }}>
-                          {t('RECENT LOOKS', 'RECENT TRY-ONS')}
+                          RECENT LOOKS
                         </span>
                         <span style={{ fontSize: '10px', fontWeight: 600, opacity: 0.65 }}>
                           {tryOnHistory.length}
@@ -2887,7 +2878,7 @@ export default function App() {
                                 letterSpacing: '0.08em',
                               }}
                             >
-                              {t('MORE DRIP', 'LOAD MORE')}
+                              MORE DRIP
                             </button>
                           ) : (
                             <button
@@ -2902,7 +2893,7 @@ export default function App() {
                                 letterSpacing: '0.08em',
                               }}
                             >
-                              {t('LESS DRIP', 'SHOW LESS')}
+                              LESS DRIP
                             </button>
                           )}
                         </div>
@@ -2938,13 +2929,13 @@ export default function App() {
                       fontWeight: 900,
                       letterSpacing: '-0.02em'
                     }}>
-                      {t('SAVED LOOKS', 'SAVED OUTFITS')}
+                      SAVED LOOKS
                     </h2>
                     <p style={{ fontSize: '15px', fontWeight: 500, opacity: 0.7 }}>
                       {savedOutfits.length} saved {savedOutfits.length === 1 ? 'outfit' : 'outfits'}
                       {SUPABASE_ON && (
                         <span className="block sm:inline sm:before:content-['\00a0\2014\00a0'] sm:before:font-normal mt-1 sm:mt-0 text-[13px]">
-                          {t('Safely stashed in your account', 'Stored in your account')}
+                          Safely stashed in your account
                         </span>
                       )}
                     </p>
@@ -2973,10 +2964,10 @@ export default function App() {
                   <div className="text-center py-20">
                     <Heart className="w-16 h-16 mx-auto mb-4 opacity-20" strokeWidth={1.5} />
                     <h3 className="mb-3" style={{ fontSize: '24px', fontWeight: 700 }}>
-                      {t('Your saved looks are empty', 'No saved outfits yet')}
+                      Your saved looks are empty
                     </h3>
                     <p className="mb-6" style={{ fontSize: '14px', opacity: 0.7 }}>
-                      {t('Build one great fit, hit save, and start your hall-of-fame.', 'Build an outfit, save it, and come back to it anytime.')}
+                      Build one great fit, hit save, and start your hall-of-fame.
                     </p>
                     <motion.button
                       whileHover={{ scale: 1.05 }}
@@ -3404,7 +3395,7 @@ export default function App() {
           </p>
           {!isLoggedIn && (
             <p className="max-w-[36rem] mx-auto text-pretty mb-10 md:mb-12 px-2" style={{ fontSize: '12px', lineHeight: 1.6, fontWeight: 600, color: 'rgba(0,0,0,0.5)' }}>
-              Accounts and core wardrobe features are free. Optional AI try-on uses paid cloud GPU when you run it—see your provider's billing (e.g. Replicate).
+              Accounts and core wardrobe features are free. Optional AI try-on uses paid cloud GPU when you run it—see your provider’s billing (e.g. Replicate).
             </p>
           )}
           <motion.button
@@ -3579,98 +3570,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Plans Section — logged-in users only */}
-      {isLoggedIn && (
-        <section className="px-6 md:px-12 lg:px-20 py-20 border-t-4 border-black">
-          <div className="max-w-[1400px] mx-auto">
-            <div className="text-center mb-14">
-              <h2 className="mb-3" style={{ fontSize: 'clamp(28px, 5vw, 48px)', fontWeight: 900, letterSpacing: '-0.02em' }}>
-                {t('Pick Your Vibe', 'Choose Your Plan')}
-              </h2>
-              <p style={{ fontSize: '15px', fontWeight: 500, opacity: 0.6 }}>
-                {t('Glow up for free or go full main character — no hidden fees, ever.', 'Start for free, upgrade when you need more. No hidden fees.')}
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-              {/* Free Plan */}
-              <div className="rounded-2xl border-4 border-black bg-white p-8 flex flex-col" style={{ boxShadow: '6px 6px 0 #000' }}>
-                <div className="mb-6">
-                  <p className="uppercase mb-2" style={{ fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', opacity: 0.4 }}>{t('On the House', 'Free Tier')}</p>
-                  <h3 style={{ fontSize: '28px', fontWeight: 900 }}>Free</h3>
-                  <p className="mt-1" style={{ fontSize: '13px', fontWeight: 500, opacity: 0.55 }}>{t('For curious babes just getting started', 'For personal use and exploration')}</p>
-                </div>
-                <div className="mb-8">
-                  <span style={{ fontSize: '48px', fontWeight: 900 }}>$0</span>
-                  <span className="ml-1" style={{ fontSize: '14px', fontWeight: 600, opacity: 0.5 }}>/month</span>
-                </div>
-                <ul className="space-y-3 mb-10 flex-1">
-                  {[
-                    t('20 looks total, on us', '20 try-ons included'),
-                    t('4 looks a day — make them count', '4 try-ons per day'),
-                    t('Full wardrobe builder', 'Full wardrobe builder'),
-                    t('Basic style suggestions', 'Basic style suggestions'),
-                    t('Community support', 'Community support'),
-                  ].map((feat) => (
-                    <li key={feat} className="flex items-start gap-3">
-                      <span className="mt-0.5 w-5 h-5 rounded-full border-2 border-black bg-white flex items-center justify-center shrink-0" style={{ fontSize: '11px', fontWeight: 900 }}>✓</span>
-                      <span style={{ fontSize: '14px', fontWeight: 500 }}>{feat}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  disabled
-                  className="w-full py-4 rounded-xl border-2 border-black font-bold cursor-default"
-                  style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em', background: 'rgba(0,0,0,0.06)' }}
-                >
-                  CURRENT PLAN
-                </button>
-              </div>
-
-              {/* Pro Plan */}
-              <div className="rounded-2xl border-4 border-black p-8 flex flex-col relative overflow-hidden" style={{ background: '#000', color: '#fff', boxShadow: '6px 6px 0 #FF69B4' }}>
-                <div className="absolute top-5 right-5 px-3 py-1 rounded-full border-2 border-white" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em' }}>
-                  {t('🔥 MOST SLAY', 'MOST POPULAR')}
-                </div>
-                <div className="mb-6">
-                  <p className="uppercase mb-2" style={{ fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', opacity: 0.45 }}>{t('Go Off, Queen', 'Premium')}</p>
-                  <h3 style={{ fontSize: '28px', fontWeight: 900 }}>Pro</h3>
-                  <p className="mt-1" style={{ fontSize: '13px', fontWeight: 500, opacity: 0.55 }}>{t('For the ones that never run out of drip', 'For power users and style enthusiasts')}</p>
-                </div>
-                <div className="mb-8">
-                  <span style={{ fontSize: '48px', fontWeight: 900 }}>$12</span>
-                  <span className="ml-1" style={{ fontSize: '14px', fontWeight: 600, opacity: 0.5 }}>/month</span>
-                </div>
-                <ul className="space-y-3 mb-10 flex-1">
-                  {[
-                    t('Unlimited looks, no cap', 'Unlimited try-ons'),
-                    t('Unlimited looks per day', 'Unlimited per day'),
-                    t('Priority glam lab — faster renders', 'Priority rendering'),
-                    t('AI style coach built in', 'AI style assistant'),
-                    t('Full wardrobe builder + smart suggestions', 'Full wardrobe builder + smart suggestions'),
-                    t('Early access to new drops', 'Early access to new features'),
-                    t('Priority support (we got you)', 'Priority support'),
-                  ].map((feat) => (
-                    <li key={feat} className="flex items-start gap-3">
-                      <span className="mt-0.5 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shrink-0" style={{ fontSize: '11px', fontWeight: 900 }}>✓</span>
-                      <span style={{ fontSize: '14px', fontWeight: 500 }}>{feat}</span>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  className="w-full py-4 rounded-xl border-2 border-white font-bold hover:bg-white hover:text-black active:opacity-90 transition-all duration-200"
-                  style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em' }}
-                >
-                  {t("LET'S COOK — UPGRADE NOW", 'UPGRADE TO PRO')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Footer */}
       <footer className="px-6 md:px-12 lg:px-20 py-16 border-t-4 border-black">
         <div className="max-w-[1400px] mx-auto">
@@ -3731,21 +3630,6 @@ export default function App() {
             <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em' }}>
               © 2026 CLUELESS. ALL RIGHTS RESERVED.
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                const next = langMode === 'slang' ? 'english' : 'slang';
-                setLangMode(next);
-                localStorage.setItem('clueless_lang_mode', next);
-              }}
-              className="flex items-center gap-1.5 rounded-full border-2 border-black px-3 py-1 hover:bg-black hover:text-white transition-all duration-200"
-              style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}
-              aria-label="Toggle language style"
-            >
-              <span style={{ opacity: langMode === 'slang' ? 1 : 0.35 }}>SLANG</span>
-              <span style={{ opacity: 0.4 }}>/</span>
-              <span style={{ opacity: langMode === 'english' ? 1 : 0.35 }}>EN</span>
-            </button>
             <div style={{ fontSize: '11px', fontWeight: 500 }}>
               YOUR STYLE, SIMPLIFIED
             </div>
