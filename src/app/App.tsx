@@ -29,6 +29,7 @@ import {
   bulkInsertWardrobeItems,
   ensureProfileRow,
   updateProfile,
+  persistTryOnImageToStorage,
 } from '@/lib/supabase/sync';
 import { fetchCanonicalSyncFromApi, fetchWardrobeFromApi } from '@/lib/wardrobe-api';
 import { getSessionOrchestrator, type AuthOrchestratorState } from '@/lib/auth/session-orchestrator';
@@ -545,8 +546,28 @@ export default function App() {
     if (!mountedRef.current) return true;
     if (profile) {
       setUserName(profile.display_name || 'Alex');
-      setHasCompletedOnboarding(profile.onboarding_completed);
       setUserSelfie(profile.selfie_url ?? null);
+
+      if (profile.onboarding_completed) {
+        setHasCompletedOnboarding(true);
+      } else {
+        // Only show onboarding to genuinely new accounts (created within the last 24h).
+        // Existing users who predate this feature have onboarding_completed=false in the DB;
+        // silently backfill them so they never see the modal.
+        const { data: authData } = await supabase.auth.getUser();
+        const createdAt = authData?.user?.created_at
+          ? new Date(authData.user.created_at)
+          : null;
+        const isNewAccount =
+          createdAt !== null && Date.now() - createdAt.getTime() < 24 * 60 * 60 * 1000;
+
+        if (isNewAccount) {
+          setHasCompletedOnboarding(false);
+        } else {
+          setHasCompletedOnboarding(true);
+          void updateProfile(supabase, userId, { onboarding_completed: true }).catch(() => {});
+        }
+      }
     }
 
     if (canonical) {
@@ -1241,6 +1262,32 @@ export default function App() {
         };
         setTryOnHistory((prev) => [entry, ...prev.filter((i) => i.id !== entry.id)]);
         showToast('Try-on generated');
+
+        // Persist the Replicate URL to durable storage in the background so the
+        // image survives after Replicate's CDN link expires (~1 hour).
+        if (SUPABASE_ON) {
+          void (async () => {
+            try {
+              const supabase = createBrowserSupabaseClient();
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) return;
+              const durableUrl = await persistTryOnImageToStorage(
+                supabase,
+                user.id,
+                snapshot.jobId,
+                snapshot.imageUrl!,
+              );
+              if (durableUrl) {
+                setTryOnImageUrl((cur) => (cur === snapshot.imageUrl ? durableUrl : cur));
+                setTryOnHistory((prev) =>
+                  prev.map((e) => (e.id === snapshot.jobId ? { ...e, imageUrl: durableUrl } : e))
+                );
+              }
+            } catch (e) {
+              console.warn('[try-on persist] background upload failed', e);
+            }
+          })();
+        }
       }
       if (snapshot.status === 'failed') {
         setVtoError({
@@ -1844,8 +1891,15 @@ export default function App() {
                         }}
                         className="w-full text-left"
                       >
-                        <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-black mb-3">
-                          <Image src={tryOnHistory[0].imageUrl} alt="Most recent try-on" fill unoptimized className="object-cover" />
+                        <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-black mb-3 bg-gray-100">
+                          <Image
+                            src={tryOnHistory[0].imageUrl}
+                            alt="Most recent try-on"
+                            fill
+                            unoptimized
+                            className="object-cover"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                          />
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 700 }}>
                           {t('Re-open your latest slay', 'View your latest try-on')}
@@ -2864,7 +2918,14 @@ export default function App() {
                             className="relative aspect-[3/4] overflow-hidden rounded-lg border-2 border-black hover:opacity-90 active:opacity-80"
                             title={`Open try-on ${new Date(entry.createdAt).toLocaleString()}`}
                           >
-                            <Image src={entry.imageUrl} alt="Past try-on result" fill unoptimized className="object-cover" />
+                            <Image
+                              src={entry.imageUrl}
+                              alt="Past try-on result"
+                              fill
+                              unoptimized
+                              className="object-cover"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                            />
                           </button>
                         ))}
                       </div>
@@ -3601,7 +3662,7 @@ export default function App() {
                   <p className="mt-1" style={{ fontSize: '13px', fontWeight: 500, opacity: 0.55 }}>{t('For curious babes just getting started', 'For personal use and exploration')}</p>
                 </div>
                 <div className="mb-8">
-                  <span style={{ fontSize: '48px', fontWeight: 900 }}>$0</span>
+                  <span style={{ fontSize: '48px', fontWeight: 900 }}>{'€'}0</span>
                   <span className="ml-1" style={{ fontSize: '14px', fontWeight: 600, opacity: 0.5 }}>/month</span>
                 </div>
                 <ul className="space-y-3 mb-10 flex-1">
@@ -3630,8 +3691,13 @@ export default function App() {
 
               {/* Pro Plan */}
               <div className="rounded-2xl border-4 border-black p-8 flex flex-col relative overflow-hidden" style={{ background: '#000', color: '#fff', boxShadow: '6px 6px 0 #FF69B4' }}>
-                <div className="absolute top-5 right-5 px-3 py-1 rounded-full border-2 border-white" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em' }}>
-                  {t('🔥 MOST SLAY', 'MOST POPULAR')}
+                <div className="absolute top-5 right-5 flex flex-col items-end gap-2">
+                  <span className="px-3 py-1 rounded-full border-2 border-white" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em' }}>
+                    {t('🔥 MOST SLAY', 'MOST POPULAR')}
+                  </span>
+                  <span className="px-3 py-1 rounded-full" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em', background: '#FF69B4', color: '#000' }}>
+                    {t('50% OFF RN', '50% OFF')}
+                  </span>
                 </div>
                 <div className="mb-6">
                   <p className="uppercase mb-2" style={{ fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', opacity: 0.45 }}>{t('Go Off, Queen', 'Premium')}</p>
@@ -3639,8 +3705,14 @@ export default function App() {
                   <p className="mt-1" style={{ fontSize: '13px', fontWeight: 500, opacity: 0.55 }}>{t('For the ones that never run out of drip', 'For power users and style enthusiasts')}</p>
                 </div>
                 <div className="mb-8">
-                  <span style={{ fontSize: '48px', fontWeight: 900 }}>$12</span>
-                  <span className="ml-1" style={{ fontSize: '14px', fontWeight: 600, opacity: 0.5 }}>/month</span>
+                  <div className="flex items-baseline gap-3">
+                    <span style={{ fontSize: '48px', fontWeight: 900 }}>{'€'}12</span>
+                    <span style={{ fontSize: '14px', fontWeight: 600, opacity: 0.5 }}>/month</span>
+                  </div>
+                  <p style={{ fontSize: '13px', fontWeight: 600, opacity: 0.55, marginTop: '4px' }}>
+                    <span style={{ textDecoration: 'line-through' }}>{'€'}24</span>
+                    {' '}{t('for a limited time only', 'limited time offer')}
+                  </p>
                 </div>
                 <ul className="space-y-3 mb-10 flex-1">
                   {[
