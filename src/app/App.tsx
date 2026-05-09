@@ -929,13 +929,13 @@ export default function App() {
 
   // Prompt for selfie if not uploaded and wardrobe has items
   useEffect(() => {
-    if (isLoggedIn && !userSelfie && wardrobeItems.length > 0 && hasCompletedOnboarding) {
+    if (isLoggedIn && !userSelfie && wardrobeItems.length > 0) {
       const timer = setTimeout(() => {
         setShowSelfieUpload(true);
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [isLoggedIn, userSelfie, wardrobeItems.length, hasCompletedOnboarding]);
+  }, [isLoggedIn, userSelfie, wardrobeItems.length]);
 
   const handleOnboardingComplete = async () => {
     setShowOnboarding(false);
