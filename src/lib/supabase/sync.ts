@@ -1,12 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeItem } from '@/types/wardrobe';
 
+export type ProfilePreferences = {
+  styleVibe?: string;
+  colorPalette?: string;
+  notes?: string;
+};
+
 type ProfileRow = {
   id: string;
   display_name: string;
   onboarding_completed: boolean;
   selfie_url: string | null;
   is_pro: boolean;
+  style_preferences: ProfilePreferences;
 };
 
 type WardrobeRow = {
@@ -49,7 +56,7 @@ export async function fetchProfile(
 ): Promise<ProfileRow | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, display_name, onboarding_completed, selfie_url, is_pro')
+    .select('id, display_name, onboarding_completed, selfie_url, is_pro, style_preferences')
     .eq('id', userId)
     .maybeSingle();
 
@@ -72,7 +79,7 @@ export async function ensureProfileRow(supabase: SupabaseClient, userId: string)
 export async function updateProfile(
   supabase: SupabaseClient,
   userId: string,
-  patch: Partial<Pick<ProfileRow, 'display_name' | 'onboarding_completed' | 'selfie_url'>>
+  patch: Partial<Pick<ProfileRow, 'display_name' | 'onboarding_completed' | 'selfie_url' | 'style_preferences'>>
 ) {
   const { error } = await supabase
     .from('profiles')

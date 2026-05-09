@@ -29,6 +29,7 @@ import {
   bulkInsertWardrobeItems,
   ensureProfileRow,
   updateProfile,
+  type ProfilePreferences,
 } from '@/lib/supabase/sync';
 import { fetchCanonicalSyncFromApi, fetchWardrobeFromApi } from '@/lib/wardrobe-api';
 import { getSessionOrchestrator, type AuthOrchestratorState } from '@/lib/auth/session-orchestrator';
@@ -48,6 +49,12 @@ const LOCAL_TRYON_HISTORY_KEY = 'clueless_tryon_history_v1';
 const LOCAL_SELECTED_OUTFIT_KEY = 'clueless_selected_outfit_v1';
 const LOCAL_SYNC_QUEUE_KEY = 'clueless_sync_queue_v1';
 const TRYON_HISTORY_PAGE_SIZE = 9;
+
+const DEFAULT_STYLE_PREFERENCES: Required<ProfilePreferences> = {
+  styleVibe: 'no-preference',
+  colorPalette: 'no-preference',
+  notes: '',
+};
 
 type TryOnHistoryEntry = {
   id: string;
@@ -303,6 +310,14 @@ function trackAuthHydration(event: string, data: Record<string, unknown> = {}): 
   console.info('[telemetry/auth-hydration]', event, data);
 }
 
+function normalizeStylePreferences(value: ProfilePreferences | null | undefined): Required<ProfilePreferences> {
+  return {
+    styleVibe: value?.styleVibe || DEFAULT_STYLE_PREFERENCES.styleVibe,
+    colorPalette: value?.colorPalette || DEFAULT_STYLE_PREFERENCES.colorPalette,
+    notes: value?.notes || DEFAULT_STYLE_PREFERENCES.notes,
+  };
+}
+
 export default function App() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(!SUPABASE_ON);
@@ -359,6 +374,11 @@ export default function App() {
   const baseModelImg = 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?auto=format&fit=crop&w=1200&q=80';
   const itemsPerPage = 8;
   const [userName, setUserName] = useState('Alex');
+  const [stylePreferences, setStylePreferences] =
+    useState<Required<ProfilePreferences>>(DEFAULT_STYLE_PREFERENCES);
+  const [stylePreferencesDraft, setStylePreferencesDraft] =
+    useState<Required<ProfilePreferences>>(DEFAULT_STYLE_PREFERENCES);
+  const [isSavingPreferences, setIsSavingPreferences] = useState(false);
   const [supabaseReady, setSupabaseReady] = useState(!SUPABASE_ON);
   const [langMode, setLangMode] = useState<'slang' | 'english'>(() => {
     if (typeof window === 'undefined') return 'slang';
@@ -568,6 +588,9 @@ export default function App() {
       setHasCompletedOnboarding(profile.onboarding_completed);
       setUserSelfie(profile.selfie_url ?? null);
       setIsPro(profile.is_pro ?? false);
+      const preferences = normalizeStylePreferences(profile.style_preferences);
+      setStylePreferences(preferences);
+      setStylePreferencesDraft(preferences);
       if (!(profile.is_pro ?? false)) {
         void fetch('/api/billing/quota')
           .then((r) => r.json())
@@ -615,6 +638,9 @@ export default function App() {
     setSelectedOutfit({});
     setUserSelfie(null);
     setUserName('Alex');
+    setStylePreferences(DEFAULT_STYLE_PREFERENCES);
+    setStylePreferencesDraft(DEFAULT_STYLE_PREFERENCES);
+    setIsSavingPreferences(false);
     setHasCompletedOnboarding(false);
     setShowOnboarding(false);
     setCurrentView('wardrobe');
@@ -975,6 +1001,44 @@ export default function App() {
       } catch (e) {
         console.error('Failed to persist selfie', e);
       }
+    }
+  };
+
+  const handleSaveStylePreferences = async () => {
+    if (!SUPABASE_ON) {
+      setStylePreferences(stylePreferencesDraft);
+      showToast('Style preferences saved');
+      return;
+    }
+
+    setIsSavingPreferences(true);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        showToast('Sign in to save style preferences.', 'error');
+        return;
+      }
+      const next = {
+        styleVibe: stylePreferencesDraft.styleVibe,
+        colorPalette: stylePreferencesDraft.colorPalette,
+        notes: stylePreferencesDraft.notes.trim().slice(0, 500),
+      };
+      const ok = await updateProfile(supabase, user.id, { style_preferences: next });
+      if (!ok) {
+        showToast('Could not save style preferences. Try again.', 'error');
+        return;
+      }
+      setStylePreferences(next);
+      setStylePreferencesDraft(next);
+      showToast('Style preferences saved');
+    } catch (e) {
+      console.error('Failed to save style preferences', e);
+      showToast('Could not save style preferences. Try again.', 'error');
+    } finally {
+      setIsSavingPreferences(false);
     }
   };
 
@@ -1554,6 +1618,10 @@ export default function App() {
   const proCheckoutHref = checkoutUrl
     ? `${checkoutUrl}?checkout[custom][user_id]=${encodeURIComponent(billingUserId ?? '')}&checkout[redirect_url]=${encodeURIComponent(checkoutRedirectUrl)}`
     : '#';
+  const stylePreferencesDirty =
+    stylePreferencesDraft.styleVibe !== stylePreferences.styleVibe ||
+    stylePreferencesDraft.colorPalette !== stylePreferences.colorPalette ||
+    stylePreferencesDraft.notes !== stylePreferences.notes;
 
   const handleItemClick = (item: WardrobeItem) => {
     setSelectedOutfit(prev => ({
@@ -1882,6 +1950,87 @@ export default function App() {
                     <p style={{ fontSize: '11px', fontWeight: 600, opacity: 0.65 }}>
                       {t(`Roughly ${mirrorMinutesSaved} mirror minutes saved and ${outfitRepeatsAvoided} outfit repeats dodged. Science-ish, but accurate enough.`, `Estimated ${mirrorMinutesSaved} minutes saved and ${outfitRepeatsAvoided} outfit repeats avoided.`)}
                     </p>
+
+                    <div
+                      className="my-5 rounded-2xl p-4"
+                      style={{ background: '#FFF', border: '2px solid #000' }}
+                    >
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="tracking-[0.1em] uppercase" style={{ fontSize: '10px', fontWeight: 800, opacity: 0.55 }}>
+                            {t('Style DNA', 'Style preferences')}
+                          </p>
+                          <p style={{ fontSize: '12px', fontWeight: 600, opacity: 0.7 }}>
+                            {t('Tell the stylist what usually works for you.', 'Tell the stylist what usually works for you.')}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveStylePreferences()}
+                          disabled={isSavingPreferences || !stylePreferencesDirty}
+                          className="rounded-full px-4 py-2 disabled:opacity-45"
+                          style={{ background: '#000', color: '#fff', fontSize: '10px', fontWeight: 800, letterSpacing: '0.08em' }}
+                        >
+                          {isSavingPreferences ? 'SAVING...' : 'SAVE'}
+                        </button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="block">
+                          <span className="mb-1 block" style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}>
+                            VIBE
+                          </span>
+                          <select
+                            value={stylePreferencesDraft.styleVibe}
+                            onChange={(event) =>
+                              setStylePreferencesDraft((prev) => ({ ...prev, styleVibe: event.target.value }))
+                            }
+                            className="w-full rounded-xl px-3 py-2"
+                            style={{ border: '2px solid #000', background: '#fff', fontSize: '12px', fontWeight: 700 }}
+                          >
+                            <option value="no-preference">No preference</option>
+                            <option value="minimal">Minimal</option>
+                            <option value="classic">Classic</option>
+                            <option value="streetwear">Streetwear</option>
+                            <option value="romantic">Romantic</option>
+                            <option value="experimental">Experimental</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block" style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}>
+                            COLOURS
+                          </span>
+                          <select
+                            value={stylePreferencesDraft.colorPalette}
+                            onChange={(event) =>
+                              setStylePreferencesDraft((prev) => ({ ...prev, colorPalette: event.target.value }))
+                            }
+                            className="w-full rounded-xl px-3 py-2"
+                            style={{ border: '2px solid #000', background: '#fff', fontSize: '12px', fontWeight: 700 }}
+                          >
+                            <option value="no-preference">No preference</option>
+                            <option value="neutrals">Neutrals</option>
+                            <option value="dark-tones">Dark tones</option>
+                            <option value="bright-colours">Bright colours</option>
+                            <option value="pastels">Pastels</option>
+                            <option value="earth-tones">Earth tones</option>
+                          </select>
+                        </label>
+                      </div>
+                      <label className="mt-3 block">
+                        <span className="mb-1 block" style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}>
+                          NOTES
+                        </span>
+                        <textarea
+                          value={stylePreferencesDraft.notes}
+                          onChange={(event) =>
+                            setStylePreferencesDraft((prev) => ({ ...prev, notes: event.target.value.slice(0, 500) }))
+                          }
+                          placeholder="e.g. avoid heels, love oversized layers, prefer comfy workwear"
+                          className="min-h-20 w-full resize-none rounded-xl px-3 py-2"
+                          style={{ border: '2px solid #000', background: '#fff', fontSize: '12px', fontWeight: 600 }}
+                        />
+                      </label>
+                    </div>
 
                     <div className="flex items-center flex-wrap gap-3">
                       <button
