@@ -139,12 +139,15 @@ export async function POST(request: NextRequest) {
             ]
           : [];
 
-    const job = createTryOnJob({
-      personImageUrl: parsed.data.personImageUrl,
-      garments,
-      crop: parsed.data.crop,
-      steps: parsed.data.steps,
-    }, ctx.userId);
+    const job = await createTryOnJob(
+      {
+        personImageUrl: parsed.data.personImageUrl,
+        garments,
+        crop: parsed.data.crop,
+        steps: parsed.data.steps,
+      },
+      ctx.userId
+    );
     return NextResponse.json(job, { status: 202 });
   } catch (error) {
     console.error('[try-on]', error);

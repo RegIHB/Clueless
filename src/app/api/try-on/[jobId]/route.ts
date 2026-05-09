@@ -17,7 +17,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
   if (limited) return limited;
 
   const { jobId } = await params;
-  const snapshot = getTryOnJob(jobId, ctx.userId);
+  const snapshot = await getTryOnJob(jobId, ctx.userId);
   if (!snapshot) {
     return NextResponse.json(
       { error: 'Job not found', details: 'Try-on job expired or does not exist.' },

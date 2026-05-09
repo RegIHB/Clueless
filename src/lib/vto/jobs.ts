@@ -1,4 +1,5 @@
 import Replicate from 'replicate';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type {
   CreateTryOnJobInput,
   TryOnJobSnapshot,
@@ -24,10 +25,24 @@ type TryOnJob = {
   createdAt: string;
   updatedAt: string;
   listeners: Set<Listener>;
+  persistChain?: Promise<void>;
 };
 
 type VtoStore = {
   jobs: Map<string, TryOnJob>;
+};
+
+type TryOnJobRow = {
+  id: string;
+  status: VtoJobStatus;
+  progress: number;
+  stage: VtoStage;
+  status_message: string;
+  image_url: string | null;
+  error_code: VtoErrorCode | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 const IDM_VTON_MODEL =
@@ -45,6 +60,13 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function adminSupabase(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
 function toSnapshot(job: TryOnJob): TryOnJobSnapshot {
   return {
     jobId: job.id,
@@ -58,6 +80,86 @@ function toSnapshot(job: TryOnJob): TryOnJobSnapshot {
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
   };
+}
+
+function rowToSnapshot(row: TryOnJobRow): TryOnJobSnapshot {
+  return {
+    jobId: row.id,
+    status: row.status,
+    progress: row.progress,
+    stage: row.stage,
+    statusMessage: row.status_message,
+    imageUrl: row.image_url ?? undefined,
+    errorCode: row.error_code ?? undefined,
+    errorMessage: row.error_message ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function inputSummary(input: CreateTryOnJobInput): Record<string, unknown> {
+  return {
+    garmentCount: input.garments?.length ?? (input.garmentImageUrl ? 1 : 0),
+    garments: input.garments?.map((g) => ({
+      code: g.code,
+      category: g.category,
+      hasPrompt: Boolean(g.prompt),
+    })),
+    category: input.category,
+    crop: input.crop,
+    steps: input.steps,
+  };
+}
+
+async function persistJobState(job: TryOnJob): Promise<void> {
+  const supabase = adminSupabase();
+  if (!supabase) return;
+  const { error } = await supabase.from('try_on_jobs').upsert(
+    {
+      id: job.id,
+      user_id: job.ownerUserId,
+      input: inputSummary(job.input),
+      status: job.status,
+      progress: job.progress,
+      stage: job.stage,
+      status_message: job.statusMessage,
+      image_url: job.imageUrl ?? null,
+      error_code: job.errorCode ?? null,
+      error_message: job.errorMessage ?? null,
+      created_at: job.createdAt,
+      updated_at: job.updatedAt,
+    },
+    { onConflict: 'id' }
+  );
+  if (error) {
+    console.error('[try-on jobs] persist failed', error);
+  }
+}
+
+function queuePersist(job: TryOnJob): void {
+  job.persistChain = (job.persistChain ?? Promise.resolve())
+    .then(() => persistJobState(job))
+    .catch((error) => {
+      console.error('[try-on jobs] persist chain failed', error);
+    });
+}
+
+async function fetchPersistedJob(jobId: string, ownerUserId: string): Promise<TryOnJobSnapshot | null> {
+  const supabase = adminSupabase();
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('try_on_jobs')
+    .select(
+      'id, status, progress, stage, status_message, image_url, error_code, error_message, created_at, updated_at'
+    )
+    .eq('id', jobId)
+    .eq('user_id', ownerUserId)
+    .maybeSingle();
+  if (error) {
+    console.error('[try-on jobs] fetch failed', error);
+    return null;
+  }
+  return data ? rowToSnapshot(data as TryOnJobRow) : null;
 }
 
 function emit(job: TryOnJob): void {
@@ -76,6 +178,7 @@ function updateJob(
 ): void {
   Object.assign(job, patch);
   job.updatedAt = nowIso();
+  queuePersist(job);
   emit(job);
 }
 
@@ -115,7 +218,7 @@ function classifyError(message: string, httpStatus?: number): VtoErrorCode {
   return 'UNKNOWN';
 }
 
-export function createTryOnJob(input: CreateTryOnJobInput, ownerUserId: string): TryOnJobSnapshot {
+export async function createTryOnJob(input: CreateTryOnJobInput, ownerUserId: string): Promise<TryOnJobSnapshot> {
   const id =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
@@ -134,6 +237,7 @@ export function createTryOnJob(input: CreateTryOnJobInput, ownerUserId: string):
     listeners: new Set(),
   };
   getStore().jobs.set(id, job);
+  await persistJobState(job);
   void processTryOnJob(job).catch((err) => {
     const msg = err instanceof Error ? err.message : String(err);
     updateJob(job, {
@@ -148,10 +252,10 @@ export function createTryOnJob(input: CreateTryOnJobInput, ownerUserId: string):
   return toSnapshot(job);
 }
 
-export function getTryOnJob(jobId: string, ownerUserId: string): TryOnJobSnapshot | null {
+export async function getTryOnJob(jobId: string, ownerUserId: string): Promise<TryOnJobSnapshot | null> {
   const job = getStore().jobs.get(jobId);
   if (job && job.ownerUserId !== ownerUserId) return null;
-  return job ? toSnapshot(job) : null;
+  return job ? toSnapshot(job) : fetchPersistedJob(jobId, ownerUserId);
 }
 
 export function subscribeTryOnJob(

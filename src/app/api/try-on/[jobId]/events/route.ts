@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { subscribeTryOnJob } from '@/lib/vto/jobs';
+import { getTryOnJob } from '@/lib/vto/jobs';
 import { requireAuth } from '@/app/api/_helpers/auth';
 import { rateLimit } from '@/app/api/_helpers/rate-limit';
 
@@ -26,28 +26,39 @@ export async function GET(_request: NextRequest, { params }: Params) {
         controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
 
-      const unsubscribe = subscribeTryOnJob(jobId, ctx.userId, (snapshot) => {
+      let closed = false;
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        controller.close();
+      };
+
+      const sendSnapshot = async () => {
+        if (closed) return;
+        const snapshot = await getTryOnJob(jobId, ctx.userId);
+        if (!snapshot) {
+          send('error', { error: 'Job not found' });
+          close();
+          return;
+        }
         send('progress', snapshot);
         if (snapshot.status === 'completed' || snapshot.status === 'failed') {
           send('end', snapshot);
-          unsubscribe?.();
-          controller.close();
+          close();
         }
-      });
+      };
 
-      if (!unsubscribe) {
-        send('error', { error: 'Job not found' });
-        controller.close();
-        return;
-      }
+      void sendSnapshot();
 
       const keepAlive = setInterval(() => {
+        if (closed) return;
+        void sendSnapshot();
         controller.enqueue(enc.encode(': keepalive\n\n'));
-      }, 15000);
+      }, 1500);
 
       cleanup = () => {
         clearInterval(keepAlive);
-        unsubscribe();
+        closed = true;
       };
     },
     cancel() {
