@@ -1,9 +1,21 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { subscribeTryOnJob } from '@/lib/vto/jobs';
+import { requireAuth } from '@/app/api/_helpers/auth';
+import { rateLimit } from '@/app/api/_helpers/rate-limit';
 
 type Params = { params: Promise<{ jobId: string }> };
 
 export async function GET(_request: NextRequest, { params }: Params) {
+  const ctx = await requireAuth();
+  if (ctx instanceof NextResponse) return ctx;
+  const limited = rateLimit({
+    scope: 'api:try-on-events',
+    subject: ctx.userId,
+    limit: 30,
+    windowMs: 5 * 60 * 1000,
+  });
+  if (limited) return limited;
+
   const { jobId } = await params;
   let cleanup: (() => void) | null = null;
 
@@ -14,7 +26,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
         controller.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
 
-      const unsubscribe = subscribeTryOnJob(jobId, (snapshot) => {
+      const unsubscribe = subscribeTryOnJob(jobId, ctx.userId, (snapshot) => {
         send('progress', snapshot);
         if (snapshot.status === 'completed' || snapshot.status === 'failed') {
           send('end', snapshot);

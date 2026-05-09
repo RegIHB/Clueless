@@ -4,6 +4,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 import { buildFallbackSuggestion } from "@/lib/outfit-fallback";
 import { wantsOutfitRecommendation } from "@/lib/outfit-intent";
+import { requireAuth } from "@/app/api/_helpers/auth";
+import { rateLimit } from "@/app/api/_helpers/rate-limit";
 
 const requestSchema = z.object({
   message: z.string().min(1),
@@ -72,6 +74,16 @@ async function callGemini(prompt: string, outfitMode: boolean): Promise<Provider
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireAuth();
+    if (ctx instanceof NextResponse) return ctx;
+    const limited = rateLimit({
+      scope: "api:chat",
+      subject: ctx.userId,
+      limit: 30,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (limited) return limited;
+
     const parsed = requestSchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });

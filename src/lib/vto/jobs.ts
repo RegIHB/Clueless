@@ -12,6 +12,7 @@ type Listener = (snapshot: TryOnJobSnapshot) => void;
 
 type TryOnJob = {
   id: string;
+  ownerUserId: string;
   input: CreateTryOnJobInput;
   status: VtoJobStatus;
   progress: number;
@@ -114,7 +115,7 @@ function classifyError(message: string, httpStatus?: number): VtoErrorCode {
   return 'UNKNOWN';
 }
 
-export function createTryOnJob(input: CreateTryOnJobInput): TryOnJobSnapshot {
+export function createTryOnJob(input: CreateTryOnJobInput, ownerUserId: string): TryOnJobSnapshot {
   const id =
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
@@ -122,6 +123,7 @@ export function createTryOnJob(input: CreateTryOnJobInput): TryOnJobSnapshot {
   const createdAt = nowIso();
   const job: TryOnJob = {
     id,
+    ownerUserId,
     input,
     status: 'queued',
     progress: 5,
@@ -146,13 +148,19 @@ export function createTryOnJob(input: CreateTryOnJobInput): TryOnJobSnapshot {
   return toSnapshot(job);
 }
 
-export function getTryOnJob(jobId: string): TryOnJobSnapshot | null {
+export function getTryOnJob(jobId: string, ownerUserId: string): TryOnJobSnapshot | null {
   const job = getStore().jobs.get(jobId);
+  if (job && job.ownerUserId !== ownerUserId) return null;
   return job ? toSnapshot(job) : null;
 }
 
-export function subscribeTryOnJob(jobId: string, listener: Listener): (() => void) | null {
+export function subscribeTryOnJob(
+  jobId: string,
+  ownerUserId: string,
+  listener: Listener
+): (() => void) | null {
   const job = getStore().jobs.get(jobId);
+  if (job && job.ownerUserId !== ownerUserId) return null;
   if (!job) return null;
   job.listeners.add(listener);
   listener(toSnapshot(job));
