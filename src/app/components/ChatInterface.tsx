@@ -68,6 +68,16 @@ export function ChatInterface({ onClose, location, weather, wardrobeItems }: Cha
     for (const it of wardrobeItems) m.set(it.code, it);
     return m;
   }, [wardrobeItems]);
+  const wardrobeForChat = useMemo(
+    () =>
+      wardrobeItems.slice(0, 80).map((item) => ({
+        code: item.code,
+        type: item.type,
+        category: item.category,
+        ...(item.title ? { title: item.title } : {}),
+      })),
+    [wardrobeItems]
+  );
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -98,7 +108,8 @@ export function ChatInterface({ onClose, location, weather, wardrobeItems }: Cha
         body: JSON.stringify({
           message: messageText,
           location,
-          weather
+          weather,
+          wardrobeItems: wardrobeForChat,
         })
       });
 
@@ -128,7 +139,7 @@ export function ChatInterface({ onClose, location, weather, wardrobeItems }: Cha
           },
         ]);
       } else {
-        const offline = buildFallbackSuggestion(messageText, weather.temp, weather.condition);
+        const offline = buildFallbackSuggestion(messageText, weather.temp, weather.condition, wardrobeItems);
         setMessages((prev) => [
           ...prev,
           {

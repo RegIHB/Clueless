@@ -6,6 +6,14 @@ import { buildFallbackSuggestion } from "@/lib/outfit-fallback";
 import { wantsOutfitRecommendation } from "@/lib/outfit-intent";
 import { requireAuth } from "@/app/api/_helpers/auth";
 import { rateLimit } from "@/app/api/_helpers/rate-limit";
+import type { WardrobeItem } from "@/types/wardrobe";
+
+const wardrobeItemSchema = z.object({
+  code: z.string().min(1).max(120),
+  type: z.string().min(1).max(120),
+  category: z.enum(["tops", "bottoms", "accessories"]),
+  title: z.string().max(500).optional(),
+});
 
 const requestSchema = z.object({
   message: z.string().min(1),
@@ -14,15 +22,27 @@ const requestSchema = z.object({
     temp: z.number().default(12),
     condition: z.string().default("Cloudy"),
   }),
+  wardrobeItems: z.array(wardrobeItemSchema).max(120).optional().default([]),
 });
 
 type ProviderResult = { reply: string };
 
 function stylistSystemPrompt(outfitMode: boolean): string {
   if (outfitMode) {
-    return "You are an AI fashion stylist. The user wants outfit help. Give concise, practical advice for their plans and the weather. No markdown headings.";
+    return "You are an AI fashion stylist. The user wants outfit help. Recommend only from the wardrobe items provided in the prompt; do not invent garments or item codes. Give concise, practical advice for their plans and the weather. No markdown headings.";
   }
   return "You are a friendly AI fashion stylist chatting with the user. They are NOT asking for a full outfit yet (greeting, small talk, or general question). Reply warmly and briefly—one or two short paragraphs max. Do NOT list specific garments, SKUs, or a full outfit. If it fits naturally, invite them to share their plans or occasion when they want concrete suggestions. No markdown headings.";
+}
+
+function wardrobePromptSummary(items: WardrobeItem[]): string {
+  if (items.length === 0) return "No wardrobe items are available yet.";
+  return items
+    .slice(0, 80)
+    .map((item) => {
+      const title = item.title ? ` — ${item.title}` : "";
+      return `${item.code} | ${item.category} | ${item.type}${title}`;
+    })
+    .join("\n");
 }
 
 async function callOpenAI(prompt: string, outfitMode: boolean): Promise<ProviderResult> {
@@ -89,16 +109,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { message, location, weather } = parsed.data;
+    const { message, location, weather, wardrobeItems } = parsed.data;
     const outfitMode = wantsOutfitRecommendation(message);
-    const fallback = buildFallbackSuggestion(message, weather.temp, weather.condition);
+    const fallback = buildFallbackSuggestion(message, weather.temp, weather.condition, wardrobeItems);
 
     const prompt = [
       `User location: ${location}.`,
       `Weather: ${weather.temp}C and ${weather.condition}.`,
+      `Available wardrobe items:\n${wardrobePromptSummary(wardrobeItems)}`,
       `User message: ${message}`,
       outfitMode
-        ? "Give concise recommendations with practical reasoning."
+        ? "Give concise recommendations with practical reasoning. Mention item names or codes only from the available wardrobe list."
         : "Respond conversationally only—no outfit rundown unless they ask.",
     ].join("\n");
 
