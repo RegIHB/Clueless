@@ -343,6 +343,7 @@ export default function App() {
   const [deletingItemCode, setDeletingItemCode] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<'wardrobe' | 'outfits'>('wardrobe');
   const [currentPage, setCurrentPage] = useState(0);
+  const [wardrobeSearchQuery, setWardrobeSearchQuery] = useState('');
   const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
   const [tryOnImageUrl, setTryOnImageUrl] = useState<string | null>(null);
   const [vtoStage, setVtoStage] = useState<VtoStage>('upload');
@@ -1514,7 +1515,14 @@ export default function App() {
   };
 
   const getCategoryItems = (category: WardrobeCategory) => {
-    return wardrobeItems.filter(item => item.category === category);
+    const query = wardrobeSearchQuery.trim().toLowerCase();
+    return wardrobeItems.filter((item) => {
+      if (item.category !== category) return false;
+      if (!query) return true;
+      return [item.code, item.type, item.title, item.attribution]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        .some((value) => value.toLowerCase().includes(query));
+    });
   };
 
   const getPaginatedItems = (category: WardrobeCategory) => {
@@ -1558,6 +1566,10 @@ export default function App() {
     setSelectedCategory(category);
     setCurrentPage(0); // Reset to first page when changing category
   };
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [wardrobeSearchQuery]);
 
   return (
     <div className="min-h-screen relative overflow-x-hidden" style={{
@@ -2443,7 +2455,7 @@ export default function App() {
 
                         <div className="flex items-center gap-3">
                           <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', opacity: 0.6 }}>
-                            {getCategoryItems(selectedCategory).length} ITEMS
+                            {getCategoryItems(selectedCategory).length} ITEM{getCategoryItems(selectedCategory).length === 1 ? '' : 'S'}
                           </span>
                           <motion.button
                             whileHover={{ scale: 1.05 }}
@@ -2463,10 +2475,65 @@ export default function App() {
                         </div>
                       </div>
 
+                      <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <label htmlFor="wardrobe-search" className="sr-only">
+                          Search wardrobe
+                        </label>
+                        <input
+                          id="wardrobe-search"
+                          type="search"
+                          value={wardrobeSearchQuery}
+                          onChange={(event) => setWardrobeSearchQuery(event.target.value)}
+                          placeholder="Search by code, type, title..."
+                          className="min-w-0 flex-1 rounded-full px-4 py-3 outline-none transition-[box-shadow,border-color] duration-200 ease-out"
+                          style={{
+                            background: '#fff',
+                            border: '2px solid #000',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            boxShadow: '4px 4px 0 rgba(0,0,0,0.12)',
+                          }}
+                        />
+                        {wardrobeSearchQuery.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => setWardrobeSearchQuery('')}
+                            className="self-start rounded-full px-4 py-2 transition-opacity hover:opacity-70 active:opacity-60 sm:self-auto"
+                            style={{
+                              background: '#FFE5C8',
+                              border: '2px solid #000',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              letterSpacing: '0.06em',
+                            }}
+                          >
+                            CLEAR
+                          </button>
+                        )}
+                      </div>
+
                       {/* Paginated Grid with Navigation — yeezy.com-inspired: borderless tiles,
                           image floats on the panel surface, code in monospace, image-only zoom on hover. */}
                       <div className="relative">
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-7 md:gap-x-4 md:gap-y-9 mb-8 min-h-[420px]">
+                  {getCategoryItems(selectedCategory).length === 0 && wardrobeSearchQuery.trim() && (
+                    <div className="col-span-full flex min-h-[320px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-black/25 bg-white/45 px-6 text-center">
+                      <p className="mb-2" style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '-0.01em' }}>
+                        No matching pieces
+                      </p>
+                      <p className="mb-5 max-w-sm" style={{ fontSize: '13px', fontWeight: 600, lineHeight: 1.6, opacity: 0.65 }}>
+                        Try a different code, garment type, or product title.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setWardrobeSearchQuery('')}
+                        className="rounded-full px-5 py-2 transition-opacity hover:opacity-75"
+                        style={{ background: '#000', color: '#fff', fontSize: '11px', fontWeight: 800, letterSpacing: '0.08em' }}
+                      >
+                        SHOW ALL
+                      </button>
+                    </div>
+                  )}
                   {getPaginatedItems(selectedCategory).items.map((item, idx) => {
                     const isSelected = selectedOutfit[item.category]?.code === item.code;
                     const titleText = item.title?.trim();
