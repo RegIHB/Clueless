@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { motion } from 'motion/react';
 import { Camera, Search, Upload, X, Check } from 'lucide-react';
@@ -12,6 +12,68 @@ type PickedProduct = {
   sourceUrl: string;
   attribution?: string;
 };
+
+type PickedLocalImage = {
+  imageUrl: string;
+  title: string;
+};
+
+const MAX_LOCAL_IMAGE_CHARS = 8000;
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const COMPRESSION_ATTEMPTS = [
+  { maxEdge: 320, quality: 0.7 },
+  { maxEdge: 256, quality: 0.66 },
+  { maxEdge: 224, quality: 0.6 },
+  { maxEdge: 192, quality: 0.56 },
+  { maxEdge: 160, quality: 0.5 },
+];
+
+function fileTitle(file: File): string {
+  return file.name.replace(/\.[^.]+$/, '').trim() || 'Uploaded wardrobe photo';
+}
+
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new window.Image();
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Image could not be loaded'));
+    };
+    image.src = objectUrl;
+  });
+}
+
+async function compressFileToDataUrl(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Choose an image file.');
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error('Image is too large. Choose a photo under 10 MB.');
+  }
+
+  const image = await loadImageFromFile(file);
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Image processing is not available in this browser.');
+
+  for (const attempt of COMPRESSION_ATTEMPTS) {
+    const scale = Math.min(1, attempt.maxEdge / Math.max(image.width, image.height));
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL('image/webp', attempt.quality);
+    if (dataUrl.length <= MAX_LOCAL_IMAGE_CHARS) return dataUrl;
+  }
+
+  throw new Error('Could not compress this image enough. Try a simpler or smaller photo.');
+}
 
 interface UploadFlowProps {
   onClose: () => void;
@@ -37,6 +99,11 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
   const [pickerResults, setPickerResults] = useState<PickedProduct[]>([]);
   const [pickerSource, setPickerSource] = useState<string | null>(null);
   const [pickedProduct, setPickedProduct] = useState<PickedProduct | null>(null);
+  const [pickedLocalImage, setPickedLocalImage] = useState<PickedLocalImage | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [fileLoading, setFileLoading] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const categories = {
     tops: ['Top', 'Dress', 'Turtleneck', 'Sweater', 'Jacket', 'Coat', 'Bodysuit'],
@@ -89,14 +156,36 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
 
   const goToDetailsFromMethod = () => {
     setPickedProduct(null);
+    setPickedLocalImage(null);
     setDetailsBackStep('method');
     setStep('details');
   };
 
   const goToDetailsFromPicker = () => {
     if (!pickedProduct) return;
+    setPickedLocalImage(null);
     setDetailsBackStep('picker');
     setStep('details');
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setFileLoading(true);
+    setFileError(null);
+    try {
+      const imageUrl = await compressFileToDataUrl(file);
+      setPickedProduct(null);
+      setPickedLocalImage({ imageUrl, title: fileTitle(file) });
+      setDetailsBackStep('method');
+      setStep('details');
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : 'Could not read that image.');
+    } finally {
+      setFileLoading(false);
+    }
   };
 
   const handleUpload = () => {
@@ -111,7 +200,12 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
             sourceUrl: pickedProduct.sourceUrl || undefined,
             attribution: pickedProduct.attribution
           }
-        : {})
+        : pickedLocalImage
+          ? {
+              imageUrl: pickedLocalImage.imageUrl,
+              title: pickedLocalImage.title,
+            }
+          : {})
     });
     setStep('success');
     setTimeout(() => {
@@ -168,6 +262,21 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
         <div
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 sm:p-8"
         >
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
           {step === 'method' && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -179,7 +288,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               </p>
 
               <button
-                onClick={goToDetailsFromMethod}
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={fileLoading}
                 className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#FFE5F1',
@@ -197,7 +308,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               </button>
 
               <button
-                onClick={goToDetailsFromMethod}
+                type="button"
+                onClick={() => uploadInputRef.current?.click()}
+                disabled={fileLoading}
                 className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#FFE5C8',
@@ -214,10 +327,22 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 </div>
               </button>
 
+              {fileLoading && (
+                <p role="status" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.7 }}>
+                  Preparing your image…
+                </p>
+              )}
+              {fileError && (
+                <p role="alert" style={{ fontSize: '13px', fontWeight: 700, color: '#b91c1c' }}>
+                  {fileError}
+                </p>
+              )}
+
               <button
                 onClick={() => {
                   setStep('picker');
                   setPickedProduct(null);
+                  setPickedLocalImage(null);
                   setSearchInput('');
                   setDebouncedQ('');
                   setPickerResults([]);
@@ -422,15 +547,15 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               animate={{ opacity: 1, y: 0 }}
               className="space-y-6"
             >
-              {pickedProduct && (
+              {(pickedProduct || pickedLocalImage) && (
                 <div className="flex gap-4 items-start">
                   <div
                     className="relative w-24 h-24 rounded-xl overflow-hidden shrink-0"
                     style={{ border: '2px solid #000' }}
                   >
                     <Image
-                      src={pickedProduct.thumbnailUrl || pickedProduct.imageUrl}
-                      alt={pickedProduct.title}
+                      src={pickedProduct?.thumbnailUrl || pickedProduct?.imageUrl || pickedLocalImage?.imageUrl || ''}
+                      alt={pickedProduct?.title || pickedLocalImage?.title || 'Selected wardrobe image'}
                       fill
                       className="object-cover"
                       sizes="96px"
@@ -439,9 +564,11 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   </div>
                   <div className="min-w-0">
                     <p style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>
-                      SELECTED PRODUCT
+                      {pickedProduct ? 'SELECTED PRODUCT' : 'SELECTED PHOTO'}
                     </p>
-                    <p style={{ fontSize: '14px', fontWeight: 600, lineHeight: 1.4 }}>{pickedProduct.title}</p>
+                    <p style={{ fontSize: '14px', fontWeight: 600, lineHeight: 1.4 }}>
+                      {pickedProduct?.title || pickedLocalImage?.title}
+                    </p>
                   </div>
                 </div>
               )}
@@ -506,6 +633,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                     } else {
                       setStep('method');
                       setPickedProduct(null);
+                      setPickedLocalImage(null);
                     }
                   }}
                   className="flex-1 px-6 py-3 rounded-full"
