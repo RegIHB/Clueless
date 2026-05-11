@@ -64,7 +64,6 @@ export function rowToSavedOutfit(row: SavedOutfitRowV2): SavedOutfit {
 
 function imageUrlForDb(url?: string): string | null {
   if (!url) return null;
-  if (url.startsWith('data:')) return null;
   return url.length > MAX_TEXT_FIELD ? url.slice(0, MAX_TEXT_FIELD) : url;
 }
 

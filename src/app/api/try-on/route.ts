@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { createTryOnJob } from '@/lib/vto/jobs';
+import { requireAuth } from '@/app/api/_helpers/auth';
+import { rateLimit } from '@/app/api/_helpers/rate-limit';
 
 const FREE_DAILY_LIMIT = 4;
 const FREE_MONTHLY_LIMIT = 20;
@@ -97,25 +99,25 @@ const tryOnSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const ctx = await requireAuth();
+    if (ctx instanceof NextResponse) return ctx;
+    const limited = rateLimit({
+      scope: 'api:try-on-create',
+      subject: ctx.userId,
+      limit: 12,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (limited) return limited;
+
     const parsed = tryOnSchema.safeParse(await request.json());
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
-    // Auth + quota check — only when Supabase is configured.
+    // Quota writes use service-role Supabase and are skipped only when quota
+    // infrastructure is not configured.
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      const { createServerSupabaseClient } = await import('@/lib/supabase/server');
-      const supabase = await createServerSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        return NextResponse.json(
-          { error: 'Sign in to run a try-on.', code: 'unauthenticated' },
-          { status: 401 },
-        );
-      }
-
-      const quota = await checkAndIncrementQuota(user.id);
+      const quota = await checkAndIncrementQuota(ctx.userId);
       if (!quota.allowed) {
         return NextResponse.json(
           { error: quota.reason, code: 'quota_exceeded' },
@@ -137,12 +139,15 @@ export async function POST(request: NextRequest) {
             ]
           : [];
 
-    const job = createTryOnJob({
-      personImageUrl: parsed.data.personImageUrl,
-      garments,
-      crop: parsed.data.crop,
-      steps: parsed.data.steps,
-    });
+    const job = await createTryOnJob(
+      {
+        personImageUrl: parsed.data.personImageUrl,
+        garments,
+        crop: parsed.data.crop,
+        steps: parsed.data.steps,
+      },
+      ctx.userId
+    );
     return NextResponse.json(job, { status: 202 });
   } catch (error) {
     console.error('[try-on]', error);
