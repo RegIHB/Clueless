@@ -306,6 +306,7 @@ function trackAuthHydration(event: string, data: Record<string, unknown> = {}): 
 export default function App() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(!SUPABASE_ON);
+  const [billingUserId, setBillingUserId] = useState<string | null>(null);
   const [isPro, setIsPro] = useState(false);
   const [tryOnQuota, setTryOnQuota] = useState<{
     dailyRemaining: number | null;
@@ -376,10 +377,10 @@ export default function App() {
   const copy = getVtoCopy(langMode === 'slang' ? 'playful' : 'minimal');
   const t = (slang: string, english: string) => langMode === 'slang' ? slang : english;
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
     if (type === 'error') sonnerToast.error(message);
     else sonnerToast.success(message);
-  };
+  }, []);
 
   const mountedRef = useRef(true);
   /** Set whenever Supabase session is verified; used for synchronous localStorage writes (no async getSession race). */
@@ -521,6 +522,7 @@ export default function App() {
     const supabase = createBrowserSupabaseClient();
     trackAuthHydration('hydrate_start', { requestedUser: Boolean(userId) });
     wardrobeUserIdRef.current = userId;
+    setBillingUserId(userId);
 
     if (savedOutfitsUserIdRef.current !== null && savedOutfitsUserIdRef.current !== userId) {
       setSavedOutfits([]);
@@ -596,10 +598,11 @@ export default function App() {
     trackAuthHydration('hydrate_failed', {});
     showToast('Could not load your wardrobe from the cloud. Try again.', 'error');
     return false;
-  }, []);
+  }, [showToast]);
 
   const clearRemoteSessionState = useCallback(() => {
     wardrobeUserIdRef.current = null;
+    setBillingUserId(null);
     savedOutfitsUserIdRef.current = null;
     setIsLoggedIn(false);
     setIsPro(false);
@@ -636,6 +639,7 @@ export default function App() {
     if (!userId) return;
     setIsLoggedIn(true);
     wardrobeUserIdRef.current = userId;
+    setBillingUserId(userId);
     try {
       const ok = await hydrateRemoteUser(userId);
       if (!ok) {
@@ -647,7 +651,7 @@ export default function App() {
       showToast('Could not load your wardrobe from the cloud. Try again.', 'error');
     }
     router.refresh();
-  }, [hydrateRemoteUser, router]);
+  }, [hydrateRemoteUser, router, showToast]);
 
   useEffect(() => {
     if (!SUPABASE_ON) return;
@@ -665,6 +669,7 @@ export default function App() {
         lastUserId = newUserId;
 
         setIsLoggedIn(true);
+        setBillingUserId(newUserId);
         if (userChanged) {
           // Switched account in the same tab — clear UI state derived from the previous user.
           setSavedOutfits([]);
@@ -1264,7 +1269,7 @@ export default function App() {
     setVtoStage('validation');
     setVtoStatusMessage(copy.idlePick);
     setVtoProgress(5);
-  }, [userSelfie, tryOnImageUrl, isGeneratingTryOn]);
+  }, [copy.idlePick, copy.idleUpload, userSelfie, tryOnImageUrl, isGeneratingTryOn]);
 
   const applyVtoSnapshot = useCallback(
     (snapshot: TryOnJobSnapshot) => {
@@ -1535,6 +1540,12 @@ export default function App() {
         : isSyncProcessing
           ? 'syncing'
           : 'retrying';
+  const checkoutUrl = process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL;
+  const checkoutRedirectUrl =
+    typeof window !== 'undefined' ? `${window.location.origin}/billing/success` : '/billing/success';
+  const proCheckoutHref = checkoutUrl
+    ? `${checkoutUrl}?checkout[custom][user_id]=${encodeURIComponent(billingUserId ?? '')}&checkout[redirect_url]=${encodeURIComponent(checkoutRedirectUrl)}`
+    : '#';
 
   const handleItemClick = (item: WardrobeItem) => {
     setSelectedOutfit(prev => ({
@@ -2838,9 +2849,7 @@ export default function App() {
                           : t("All 20 free looks used this month — resets next month or go Pro", "Monthly free looks used up — upgrade for unlimited")}
                       </p>
                       <a
-                        href={process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
-                          ? `${process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL}?checkout[custom][user_id]=${encodeURIComponent(wardrobeUserIdRef.current ?? '')}&checkout[redirect_url]=${encodeURIComponent(typeof window !== 'undefined' ? `${window.location.origin}/billing/success` : '/billing/success')}`
-                          : '#'}
+                        href={proCheckoutHref}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-block px-4 py-1.5 rounded-full"
@@ -3543,7 +3552,7 @@ export default function App() {
           </p>
           {!isLoggedIn && (
             <p className="max-w-[36rem] mx-auto text-pretty mb-10 md:mb-12 px-2" style={{ fontSize: '12px', lineHeight: 1.6, fontWeight: 600, color: 'rgba(0,0,0,0.5)' }}>
-              Accounts and core wardrobe features are free. Optional AI try-on uses paid cloud GPU when you run it—see your provider's billing (e.g. Replicate).
+              Accounts and core wardrobe features are free. Optional AI try-on uses paid cloud GPU when you run it—see your provider&apos;s billing (e.g. Replicate).
             </p>
           )}
           <motion.button
@@ -3828,9 +3837,7 @@ export default function App() {
                   </>
                 ) : (
                   <a
-                    href={process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL
-                      ? `${process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL}?checkout[custom][user_id]=${encodeURIComponent(wardrobeUserIdRef.current ?? '')}&checkout[redirect_url]=${encodeURIComponent(typeof window !== 'undefined' ? `${window.location.origin}/billing/success` : '/billing/success')}`
-                      : '#'}
+                    href={proCheckoutHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full py-4 rounded-xl border-2 border-white font-bold hover:bg-white hover:text-black active:opacity-90 transition-all duration-200 text-center block"

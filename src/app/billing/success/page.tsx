@@ -41,7 +41,7 @@ export default function BillingSuccessPage() {
           className="mb-3"
           style={{ fontSize: 'clamp(32px, 6vw, 52px)', fontWeight: 900, letterSpacing: '-0.02em', lineHeight: 1.1 }}
         >
-          You're officially Pro.
+          You&apos;re officially Pro.
         </h1>
         <p className="mb-10" style={{ fontSize: '16px', fontWeight: 500, opacity: 0.7, lineHeight: 1.6 }}>
           Unlimited looks, priority renders, and the full experience — all unlocked.
@@ -82,7 +82,7 @@ export default function BillingSuccessPage() {
             boxShadow: '4px 4px 0 #FF69B4',
           }}
         >
-          LET'S GO →
+          LET&apos;S GO →
         </button>
         <p style={{ fontSize: '12px', opacity: 0.5, fontWeight: 500 }}>
           Redirecting automatically in {countdown}s
