@@ -661,6 +661,14 @@ export default function App() {
     setDeletingItemCode(null);
     setSyncQueue([]);
     setIsSyncProcessing(false);
+
+    try {
+      localStorage.removeItem(LOCAL_TRYON_HISTORY_KEY);
+      localStorage.removeItem(LOCAL_SELECTED_OUTFIT_KEY);
+      localStorage.removeItem(LOCAL_SYNC_QUEUE_KEY);
+      localStorage.removeItem('userSelfie');
+    } catch { /* quota or security errors in rare contexts */ }
+    setTryOnHistory([]);
   }, []);
 
   const handleAuthDialogSignedIn = useCallback(async () => {
