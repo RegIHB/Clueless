@@ -52,7 +52,7 @@ Always check for: auth vulnerabilities, RLS violations, client/server boundary l
 
 ### Environment variables
 
-Copy `.env.example` to `.env.local` and fill in values. The app starts without real Supabase/AI keys, but auth and data sync features require valid credentials. Free-tier APIs (Open-Meteo weather, BigDataCloud geocoding, Openverse image search) work without keys.
+Copy `.env.example` to `.env.local` and fill in values. The app starts without real Supabase/AI keys, but auth, AI chat, and data sync features require valid credentials. Free-tier APIs (Open-Meteo weather, BigDataCloud geocoding, Openverse image search) work without keys.
 
 ### Caveats
 
