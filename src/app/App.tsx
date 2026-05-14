@@ -2588,6 +2588,7 @@ export default function App() {
                         >
                           {(['tops', 'bottoms', 'accessories'] as WardrobeCategory[]).map((category) => {
                             const active = selectedCategory === category;
+                            const count = wardrobeItems.filter((i) => i.category === category).length;
                             return (
                               <button
                                 key={category}
@@ -2603,7 +2604,7 @@ export default function App() {
                                   color: active ? '#000' : 'rgba(0,0,0,0.45)'
                                 }}
                               >
-                                {category}
+                                {category} ({count})
                                 <motion.span
                                   className="absolute left-3 right-3 -bottom-0.5 h-[2px] bg-black"
                                   initial={false}
