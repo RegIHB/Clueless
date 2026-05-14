@@ -404,6 +404,8 @@ export default function App() {
   }, []);
 
   const mountedRef = useRef(true);
+  /** Guards against concurrent hydrateRemoteUser calls (sign-in callback + orchestrator race). */
+  const hydratingRef = useRef<string | null>(null);
   /** Set whenever Supabase session is verified; used for synchronous localStorage writes (no async getSession race). */
   const wardrobeUserIdRef = useRef<string | null>(null);
   /** Last user id we loaded saved outfits for — clear list when switching accounts. */
@@ -540,6 +542,8 @@ export default function App() {
   }, [processSyncQueue, syncQueue.length]);
 
   const hydrateRemoteUser = useCallback(async (userId: string): Promise<boolean> => {
+    if (hydratingRef.current === userId) return true;
+    hydratingRef.current = userId;
     const supabase = createBrowserSupabaseClient();
     trackAuthHydration('hydrate_start', { requestedUser: Boolean(userId) });
     wardrobeUserIdRef.current = userId;
@@ -620,11 +624,13 @@ export default function App() {
     }
 
     trackAuthHydration('hydrate_failed', {});
+    hydratingRef.current = null;
     showToast('Could not load your wardrobe from the cloud. Try again.', 'error');
     return false;
   }, [showToast]);
 
   const clearRemoteSessionState = useCallback(() => {
+    hydratingRef.current = null;
     wardrobeUserIdRef.current = null;
     setBillingUserId(null);
     savedOutfitsUserIdRef.current = null;
