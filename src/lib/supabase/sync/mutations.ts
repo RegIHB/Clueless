@@ -151,6 +151,8 @@ type OutfitInput = {
   clientOutfitId: string;
   tops?: WardrobeItem;
   bottoms?: WardrobeItem;
+  outerwear?: WardrobeItem;
+  footwear?: WardrobeItem;
   accessories?: WardrobeItem;
   savedAt: Date;
   mutationId?: string;
@@ -167,7 +169,7 @@ export async function upsertSavedOutfit(
       const fetched = await supabase
         .from('saved_outfits_v2')
         .select(
-          'id, user_id, client_outfit_id, tops_client_item_id, bottoms_client_item_id, accessories_client_item_id, snapshot, version, deleted_at, saved_at, created_at, updated_at'
+          'id, user_id, client_outfit_id, tops_client_item_id, bottoms_client_item_id, outerwear_client_item_id, footwear_client_item_id, accessories_client_item_id, snapshot, version, deleted_at, saved_at, created_at, updated_at'
         )
         .eq('id', existing.value.resultId)
         .maybeSingle();
@@ -182,10 +184,14 @@ export async function upsertSavedOutfit(
     client_outfit_id: outfit.clientOutfitId,
     tops_client_item_id: outfit.tops?.code ?? null,
     bottoms_client_item_id: outfit.bottoms?.code ?? null,
+    outerwear_client_item_id: outfit.outerwear?.code ?? null,
+    footwear_client_item_id: outfit.footwear?.code ?? null,
     accessories_client_item_id: outfit.accessories?.code ?? null,
     snapshot: {
       tops: slimWardrobeSnapshot(outfit.tops),
       bottoms: slimWardrobeSnapshot(outfit.bottoms),
+      outerwear: slimWardrobeSnapshot(outfit.outerwear),
+      footwear: slimWardrobeSnapshot(outfit.footwear),
       accessories: slimWardrobeSnapshot(outfit.accessories),
     },
     saved_at: outfit.savedAt.toISOString(),
@@ -195,7 +201,7 @@ export async function upsertSavedOutfit(
     .from('saved_outfits_v2')
     .upsert(row, { onConflict: 'user_id,client_outfit_id', ignoreDuplicates: false })
     .select(
-      'id, user_id, client_outfit_id, tops_client_item_id, bottoms_client_item_id, accessories_client_item_id, snapshot, version, deleted_at, saved_at, created_at, updated_at'
+      'id, user_id, client_outfit_id, tops_client_item_id, bottoms_client_item_id, outerwear_client_item_id, footwear_client_item_id, accessories_client_item_id, snapshot, version, deleted_at, saved_at, created_at, updated_at'
     )
     .single();
 
@@ -211,6 +217,8 @@ export async function upsertSavedOutfit(
       payload: {
         tops: row.snapshot.tops,
         bottoms: row.snapshot.bottoms,
+        outerwear: row.snapshot.outerwear,
+        footwear: row.snapshot.footwear,
         accessories: row.snapshot.accessories,
         savedAt: row.saved_at,
       },

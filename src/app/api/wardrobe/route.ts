@@ -16,7 +16,7 @@ const optionalUrlish = z.preprocess(
 const upsertSchema = z.object({
   code: z.string().min(1).max(120),
   type: z.string().min(1).max(120),
-  category: z.enum(['tops', 'bottoms', 'accessories']),
+  category: z.enum(['tops', 'bottoms', 'outerwear', 'footwear', 'accessories']),
   imageUrl: optionalUrlish,
   title: z.string().max(500).optional(),
   sourceUrl: optionalUrlish,

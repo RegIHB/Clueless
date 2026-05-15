@@ -90,7 +90,7 @@ interface UploadFlowProps {
 export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
   const [step, setStep] = useState<'method' | 'picker' | 'details' | 'success'>('method');
   const [detailsBackStep, setDetailsBackStep] = useState<'method' | 'picker'>('method');
-  const [selectedCategory, setSelectedCategory] = useState<'tops' | 'bottoms' | 'accessories'>('tops');
+  const [selectedCategory, setSelectedCategory] = useState<'tops' | 'bottoms' | 'outerwear' | 'footwear' | 'accessories'>('tops');
   const [selectedType, setSelectedType] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -106,9 +106,11 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const categories = {
-    tops: ['Top', 'Dress', 'Turtleneck', 'Sweater', 'Jacket', 'Coat', 'Bodysuit'],
+    tops: ['Top', 'Dress', 'Turtleneck', 'Sweater', 'Bodysuit'],
     bottoms: ['Pants', 'Shorts', 'Skirt'],
-    accessories: ['Hat', 'Scarf', 'Belt', 'Bag']
+    outerwear: ['Jacket', 'Coat', 'Blazer', 'Vest', 'Hoodie'],
+    footwear: ['Sneakers', 'Boots', 'Heels', 'Sandals', 'Flats', 'Loafers'],
+    accessories: ['Hat', 'Scarf', 'Belt', 'Bag', 'Sunglasses', 'Jewellery']
   };
 
   useEffect(() => {
@@ -578,7 +580,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   CATEGORY
                 </label>
                 <div className="flex gap-2">
-                  {(['tops', 'bottoms', 'accessories'] as const).map((cat) => (
+                  {(['tops', 'bottoms', 'outerwear', 'footwear', 'accessories'] as const).map((cat) => (
                     <button
                       key={cat}
                       onClick={() => {

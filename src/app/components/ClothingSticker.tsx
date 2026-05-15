@@ -107,6 +107,29 @@ export function ClothingSticker({ type, code, imageUrl }: ClothingStickerProps) 
           width: '20%',
           height: '25%'
         };
+      case 'sneakers':
+      case 'boots':
+      case 'heels':
+      case 'sandals':
+      case 'flats':
+      case 'loafers':
+        return {
+          top: '82%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '36%',
+          height: '14%'
+        };
+      case 'blazer':
+      case 'vest':
+      case 'hoodie':
+        return {
+          top: '14%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '55%',
+          height: '35%'
+        };
       case 'skirt':
         return {
           top: '42%',
