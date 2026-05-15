@@ -1,4 +1,4 @@
-export type WardrobeCategory = 'tops' | 'bottoms' | 'accessories';
+export type WardrobeCategory = 'tops' | 'bottoms' | 'outerwear' | 'footwear' | 'accessories';
 
 export interface WardrobeItem {
   code: string;
@@ -14,6 +14,8 @@ export interface SavedOutfit {
   id: string;
   tops?: WardrobeItem;
   bottoms?: WardrobeItem;
+  outerwear?: WardrobeItem;
+  footwear?: WardrobeItem;
   accessories?: WardrobeItem;
   savedAt: Date;
 }

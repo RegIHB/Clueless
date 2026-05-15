@@ -139,17 +139,12 @@ function inferTryOnErrorHint(code?: VtoErrorCode): string {
 }
 
 function resolvePrimaryTryOnGarment(
-  selectedOutfit: { tops?: WardrobeItem; bottoms?: WardrobeItem; accessories?: WardrobeItem },
+  selectedOutfit: { tops?: WardrobeItem; bottoms?: WardrobeItem; outerwear?: WardrobeItem; footwear?: WardrobeItem; accessories?: WardrobeItem },
   selectedCategory: WardrobeCategory
 ): WardrobeItem | null {
-  const categoryPick =
-    selectedCategory === 'tops'
-      ? selectedOutfit.tops
-      : selectedCategory === 'bottoms'
-        ? selectedOutfit.bottoms
-        : selectedOutfit.accessories;
+  const categoryPick = selectedOutfit[selectedCategory];
   if (categoryPick) return categoryPick;
-  return selectedOutfit.tops ?? selectedOutfit.bottoms ?? selectedOutfit.accessories ?? null;
+  return selectedOutfit.tops ?? selectedOutfit.bottoms ?? selectedOutfit.outerwear ?? selectedOutfit.footwear ?? selectedOutfit.accessories ?? null;
 }
 
 function toVtoCategory(item: WardrobeItem): 'upper_body' | 'lower_body' | 'dresses' {
@@ -160,12 +155,10 @@ function toVtoCategory(item: WardrobeItem): 'upper_body' | 'lower_body' | 'dress
 }
 
 function resolveTryOnGarments(
-  selectedOutfit: { tops?: WardrobeItem; bottoms?: WardrobeItem; accessories?: WardrobeItem },
+  selectedOutfit: { tops?: WardrobeItem; bottoms?: WardrobeItem; outerwear?: WardrobeItem; footwear?: WardrobeItem; accessories?: WardrobeItem },
   _selectedCategory: WardrobeCategory
 ): WardrobeItem[] {
-  // Apply base garments first, then accessories last so they are not overwritten
-  // by later generation passes.
-  return [selectedOutfit.tops, selectedOutfit.bottoms, selectedOutfit.accessories].filter(
+  return [selectedOutfit.tops, selectedOutfit.bottoms, selectedOutfit.outerwear, selectedOutfit.footwear, selectedOutfit.accessories].filter(
     (item): item is WardrobeItem => !!item
   );
 }
@@ -287,7 +280,7 @@ function wardrobeItemLabel(item: WardrobeItem | undefined): string {
 
 function findTryOnImageForOutfit(outfit: SavedOutfit, history: TryOnHistoryEntry[]): string | null {
   const codes = new Set(
-    [outfit.tops?.code, outfit.bottoms?.code, outfit.accessories?.code].filter(Boolean)
+    [outfit.tops?.code, outfit.bottoms?.code, outfit.outerwear?.code, outfit.footwear?.code, outfit.accessories?.code].filter(Boolean)
   );
   if (codes.size === 0) return null;
   const match = history.find((e) => e.garmentCode && codes.has(e.garmentCode));
@@ -338,6 +331,8 @@ export default function App() {
   const [selectedOutfit, setSelectedOutfit] = useState<{
     tops?: WardrobeItem;
     bottoms?: WardrobeItem;
+    outerwear?: WardrobeItem;
+    footwear?: WardrobeItem;
     accessories?: WardrobeItem;
   }>({});
   const [showChat, setShowChat] = useState(false);
@@ -1043,7 +1038,7 @@ export default function App() {
   };
 
   const handleSaveOutfit = async () => {
-    if (!selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.accessories) {
+    if (!selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.outerwear && !selectedOutfit.footwear && !selectedOutfit.accessories) {
       showToast('Select at least one piece (top, bottom, or accessory) to save.', 'error');
       return;
     }
@@ -1481,7 +1476,7 @@ export default function App() {
       showToast('Select at least one outfit item', 'error');
       return;
     }
-    if (!selectedOutfit.tops && !selectedOutfit.bottoms && selectedOutfit.accessories) {
+    if (!selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.outerwear && !selectedOutfit.footwear && selectedOutfit.accessories) {
       showToast('For realistic try-on, select a top or bottom item first.', 'error');
       return;
     }
@@ -2572,7 +2567,7 @@ export default function App() {
                           role="tablist"
                           aria-label="Wardrobe categories"
                         >
-                          {(['tops', 'bottoms', 'accessories'] as WardrobeCategory[]).map((category) => {
+                          {(['tops', 'bottoms', 'outerwear', 'footwear', 'accessories'] as WardrobeCategory[]).map((category) => {
                             const active = selectedCategory === category;
                             return (
                               <button
@@ -2974,6 +2969,38 @@ export default function App() {
                       </motion.div>
                     )}
 
+                    {!tryOnImageUrl && selectedOutfit.outerwear && (
+                      <motion.div
+                        key={selectedOutfit.outerwear.code}
+                        initial={false}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                        className="absolute inset-0 pointer-events-none"
+                      >
+                        <ClothingSticker
+                          type={selectedOutfit.outerwear.type}
+                          code={selectedOutfit.outerwear.code}
+                          imageUrl={selectedOutfit.outerwear.imageUrl}
+                        />
+                      </motion.div>
+                    )}
+
+                    {!tryOnImageUrl && selectedOutfit.footwear && (
+                      <motion.div
+                        key={selectedOutfit.footwear.code}
+                        initial={false}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                        className="absolute inset-0 pointer-events-none"
+                      >
+                        <ClothingSticker
+                          type={selectedOutfit.footwear.type}
+                          code={selectedOutfit.footwear.code}
+                          imageUrl={selectedOutfit.footwear.imageUrl}
+                        />
+                      </motion.div>
+                    )}
+
                     {!tryOnImageUrl && selectedOutfit.accessories && (
                       <motion.div
                         key={selectedOutfit.accessories.code}
@@ -2991,7 +3018,7 @@ export default function App() {
                     )}
 
                     {/* Empty state */}
-                    {userSelfie && !tryOnImageUrl && !selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.accessories && (
+                    {userSelfie && !tryOnImageUrl && !selectedOutfit.tops && !selectedOutfit.bottoms && !selectedOutfit.outerwear && !selectedOutfit.footwear && !selectedOutfit.accessories && (
                       <div className="absolute inset-0 flex items-center justify-center z-20">
                         <div className="text-center px-8">
                           <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-30" strokeWidth={1.5} />

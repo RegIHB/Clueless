@@ -9,7 +9,7 @@ function isWardrobeRow(x: unknown): x is import('@/types/wardrobe').WardrobeItem
   return (
     typeof o.code === 'string' &&
     typeof o.type === 'string' &&
-    (o.category === 'tops' || o.category === 'bottoms' || o.category === 'accessories')
+    (o.category === 'tops' || o.category === 'bottoms' || o.category === 'outerwear' || o.category === 'footwear' || o.category === 'accessories')
   );
 }
 

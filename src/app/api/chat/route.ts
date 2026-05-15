@@ -11,7 +11,7 @@ import type { WardrobeItem } from "@/types/wardrobe";
 const wardrobeItemSchema = z.object({
   code: z.string().min(1).max(120),
   type: z.string().min(1).max(120),
-  category: z.enum(["tops", "bottoms", "accessories"]),
+  category: z.enum(["tops", "bottoms", "outerwear", "footwear", "accessories"]),
   title: z.string().max(500).optional(),
 });
 

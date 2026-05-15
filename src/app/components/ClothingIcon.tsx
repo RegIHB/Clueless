@@ -99,6 +99,65 @@ export function ClothingIcon({ type }: ClothingIconProps) {
             <path d="M35 30 Q35 20 50 20 Q65 20 65 30" fill="none" stroke="currentColor" strokeWidth="3" />
           </svg>
         );
+      case 'sneakers':
+      case 'flats':
+      case 'loafers':
+        return (
+          <svg viewBox="0 0 100 100" fill="currentColor" className="w-full h-full">
+            <path d="M15 55 L30 45 L45 42 L70 45 L85 55 L85 65 L15 65 Z" />
+          </svg>
+        );
+      case 'boots':
+        return (
+          <svg viewBox="0 0 100 100" fill="currentColor" className="w-full h-full">
+            <path d="M35 20 L65 20 L65 55 L80 60 L80 75 L20 75 L20 60 L35 55 Z" />
+          </svg>
+        );
+      case 'heels':
+        return (
+          <svg viewBox="0 0 100 100" fill="currentColor" className="w-full h-full">
+            <path d="M30 30 L50 28 L65 35 L80 55 L80 65 L20 65 L20 60 L25 55 Z" />
+            <rect x="25" y="65" width="6" height="15" rx="1" />
+          </svg>
+        );
+      case 'sandals':
+        return (
+          <svg viewBox="0 0 100 100" fill="currentColor" className="w-full h-full">
+            <path d="M20 60 L80 60 L85 70 L15 70 Z" />
+            <path d="M30 50 L50 45 L70 50" fill="none" stroke="currentColor" strokeWidth="4" />
+          </svg>
+        );
+      case 'blazer':
+      case 'vest':
+        return (
+          <svg viewBox="0 0 100 100" fill="currentColor" className="w-full h-full">
+            <path d="M25 20 L35 10 L45 15 L48 20 L52 20 L55 15 L65 10 L75 20 L75 85 L60 85 L60 40 L50 45 L40 40 L40 85 L25 85 Z" />
+          </svg>
+        );
+      case 'hoodie':
+        return (
+          <svg viewBox="0 0 100 100" fill="currentColor" className="w-full h-full">
+            <path d="M20 25 L30 15 L40 20 L50 15 L60 20 L70 15 L80 25 L80 75 L20 75 Z" />
+            <path d="M40 15 Q50 8 60 15" fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        );
+      case 'sunglasses':
+        return (
+          <svg viewBox="0 0 100 100" fill="currentColor" className="w-full h-full">
+            <ellipse cx="35" cy="50" rx="15" ry="12" />
+            <ellipse cx="65" cy="50" rx="15" ry="12" />
+            <path d="M50 50 L50 50" fill="none" stroke="currentColor" strokeWidth="3" />
+            <path d="M20 48 L15 45" fill="none" stroke="currentColor" strokeWidth="2" />
+            <path d="M80 48 L85 45" fill="none" stroke="currentColor" strokeWidth="2" />
+          </svg>
+        );
+      case 'jewellery':
+        return (
+          <svg viewBox="0 0 100 100" fill="currentColor" className="w-full h-full">
+            <circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" strokeWidth="4" />
+            <circle cx="50" cy="30" r="6" />
+          </svg>
+        );
       default:
         return (
           <svg viewBox="0 0 100 100" fill="currentColor" className="w-full h-full">
