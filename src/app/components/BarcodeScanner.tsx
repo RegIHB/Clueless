@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { BrowserMultiFormatReader } from '@zxing/browser';
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 
 type BarcodeScannerProps = {
   onDetected: (code: string) => void;
@@ -19,7 +19,19 @@ export function BarcodeScanner({ onDetected, onError, active }: BarcodeScannerPr
     handledRef.current = false;
 
     let reader: BrowserMultiFormatReader | null = null;
+    let controls: IScannerControls | null = null;
     let cancelled = false;
+
+    const stopCamera = () => {
+      controls?.stop();
+      controls = null;
+      const video = videoRef.current;
+      const stream = video?.srcObject;
+      if (stream instanceof MediaStream) {
+        for (const track of stream.getTracks()) track.stop();
+      }
+      if (video) video.srcObject = null;
+    };
 
     const start = async () => {
       setStarting(true);
@@ -30,9 +42,9 @@ export function BarcodeScanner({ onDetected, onError, active }: BarcodeScannerPr
           devices.find((d) => /back|rear|environment/i.test(d.label))?.deviceId ??
           devices[0]?.deviceId;
 
-        if (!videoRef.current) return;
+        if (!videoRef.current || cancelled) return;
 
-        await reader.decodeFromVideoDevice(back, videoRef.current, (result) => {
+        controls = await reader.decodeFromVideoDevice(back, videoRef.current, (result) => {
           if (cancelled || handledRef.current) return;
           if (result) {
             const digits = result.getText()?.replace(/\D/g, '') ?? '';
@@ -59,7 +71,8 @@ export function BarcodeScanner({ onDetected, onError, active }: BarcodeScannerPr
 
     return () => {
       cancelled = true;
-      reader?.reset();
+      stopCamera();
+      reader = null;
     };
   }, [active, onDetected, onError]);
 

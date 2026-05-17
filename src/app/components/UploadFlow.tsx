@@ -1050,7 +1050,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                     })}
                   </div>
                 )}
-              </div>
+              </motion.div>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <button
