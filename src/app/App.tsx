@@ -51,7 +51,6 @@ const FOOTER_PRODUCT_LINKS = [
 const FOOTER_LEGAL_LINKS = [
   { label: 'Privacy Policy', href: '/privacy' },
   { label: 'Terms of Service', href: '/terms' },
-  { label: 'Cookie Policy', href: '/cookies' },
 ] as const;
 const AUTH_HYDRATION_TELEMETRY =
   process.env.NODE_ENV !== 'production' ||
@@ -4287,6 +4286,16 @@ export default function App() {
                     </a>
                   </li>
                 ))}
+                <li>
+                  <button
+                    type="button"
+                    onClick={openCookiePreferences}
+                    className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block text-left"
+                    style={{ fontSize: '13px', fontWeight: 500 }}
+                  >
+                    Cookie policy
+                  </button>
+                </li>
                 <li>
                   <button
                     type="button"

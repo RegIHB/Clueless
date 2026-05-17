@@ -16,7 +16,7 @@ import {
   writeCookieConsent,
   type CookieConsent,
 } from '@/lib/cookie-consent';
-import { CookieConsentBanner } from './CookieConsentBanner';
+import { CookieConsentBanner, type CookieBannerView } from './CookieConsentBanner';
 
 type CookieConsentContextValue = {
   consent: CookieConsent | null;
@@ -38,7 +38,6 @@ export function useCookieConsent(): CookieConsentContextValue {
   return ctx;
 }
 
-/** Safe hook for optional consumers (e.g. footer) when provider might not wrap yet. */
 export function useCookieConsentOptional(): CookieConsentContextValue | null {
   return useContext(CookieConsentContext);
 }
@@ -52,6 +51,7 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
   const [consent, setConsent] = useState<CookieConsent | null>(null);
   const [ready, setReady] = useState(false);
   const [forceBanner, setForceBanner] = useState(false);
+  const [bannerView, setBannerView] = useState<CookieBannerView>('compact');
 
   useEffect(() => {
     setConsent(readCookieConsent());
@@ -60,7 +60,10 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
     const onChange = (event: Event) => {
       const detail = (event as CustomEvent<CookieConsent | null>).detail ?? null;
       setConsent(detail);
-      if (detail) setForceBanner(false);
+      if (detail) {
+        setForceBanner(false);
+        setBannerView('compact');
+      }
     };
 
     window.addEventListener(COOKIE_CONSENT_EVENT, onChange);
@@ -71,11 +74,15 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
     const next = writeCookieConsent(analytics);
     setConsent(next);
     setForceBanner(false);
+    setBannerView('compact');
   }, []);
 
   const acceptAll = useCallback(() => persist(true), [persist]);
   const acceptEssentialOnly = useCallback(() => persist(false), [persist]);
-  const openPreferences = useCallback(() => setForceBanner(true), []);
+  const openPreferences = useCallback(() => {
+    setBannerView('details');
+    setForceBanner(true);
+  }, []);
 
   const showBanner = ready && (forceBanner || consent === null);
   const analyticsAllowed = consent?.analytics === true;
@@ -98,6 +105,8 @@ export function CookieConsentProvider({ children }: { children: ReactNode }) {
       {children}
       <CookieConsentBanner
         open={showBanner}
+        view={bannerView}
+        onViewChange={setBannerView}
         onAcceptAll={acceptAll}
         onEssentialOnly={acceptEssentialOnly}
       />
