@@ -42,15 +42,6 @@ export function ClothingSticker({ type, code, imageUrl }: ClothingStickerProps) 
           width: '48%',
           height: '28%'
         };
-      case 'jacket':
-      case 'coat':
-        return {
-          top: '14%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '55%',
-          height: '35%'
-        };
       case 'pants':
         return {
           top: '42%',
@@ -107,25 +98,38 @@ export function ClothingSticker({ type, code, imageUrl }: ClothingStickerProps) 
           width: '20%',
           height: '25%'
         };
+      case 'shoes':
+      case 'trainers':
       case 'sneakers':
       case 'boots':
       case 'heels':
       case 'sandals':
       case 'flats':
       case 'loafers':
+      case 'footwear':
         return {
-          top: '82%',
+          top: '78%',
           left: '50%',
           transform: 'translateX(-50%)',
-          width: '36%',
+          width: '55%',
           height: '14%'
         };
+      case 'coat':
+      case 'jacket':
       case 'blazer':
+      case 'cardigan':
+      case 'gilet':
+      case 'parka':
+      case 'trench':
+      case 'windbreaker':
       case 'vest':
       case 'hoodie':
+      case 'outerwear':
+        // TODO: outerwear layering over top — implement when
+        // z-index stacking and blend modes are added to preview
         return {
           top: '14%',
-          left: '50%',
+          left: '55%',
           transform: 'translateX(-50%)',
           width: '55%',
           height: '35%'
