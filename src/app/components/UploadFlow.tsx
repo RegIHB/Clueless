@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { motion } from 'motion/react';
-import { Camera, Search, Upload, X, Check } from 'lucide-react';
+import { Camera, Search, Upload, X, Check, ScanBarcode } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
+import { BarcodeScanner } from './BarcodeScanner';
 
 type PickedProduct = {
   id: string;
@@ -88,8 +89,8 @@ interface UploadFlowProps {
 }
 
 export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
-  const [step, setStep] = useState<'method' | 'picker' | 'details' | 'success'>('method');
-  const [detailsBackStep, setDetailsBackStep] = useState<'method' | 'picker'>('method');
+  const [step, setStep] = useState<'method' | 'picker' | 'scan' | 'barcode' | 'details' | 'success'>('method');
+  const [detailsBackStep, setDetailsBackStep] = useState<'method' | 'picker' | 'scan' | 'barcode'>('method');
   const [selectedCategory, setSelectedCategory] = useState<'tops' | 'bottoms' | 'outerwear' | 'footwear' | 'accessories'>('tops');
   const [selectedType, setSelectedType] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -98,13 +99,25 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
   const [pickerError, setPickerError] = useState<string | null>(null);
   const [pickerResults, setPickerResults] = useState<PickedProduct[]>([]);
   const [pickerSource, setPickerSource] = useState<string | null>(null);
+  const [photoResults, setPhotoResults] = useState<PickedProduct[]>([]);
+  const [photoSource, setPhotoSource] = useState<string | null>(null);
+  const [barcodeResults, setBarcodeResults] = useState<PickedProduct[]>([]);
+  const [barcodeSource, setBarcodeSource] = useState<string | null>(null);
   const [pickedProduct, setPickedProduct] = useState<PickedProduct | null>(null);
   const [pickedLocalImage, setPickedLocalImage] = useState<PickedLocalImage | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
   const [removingBg, setRemovingBg] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoSuggestedQuery, setPhotoSuggestedQuery] = useState<string | null>(null);
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
+  const [barcodeError, setBarcodeError] = useState<string | null>(null);
+  const [barcodeScanned, setBarcodeScanned] = useState<string | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const photoSearchRequestIdRef = useRef(0);
 
   const categories = {
     tops: ['Top', 'Dress', 'Turtleneck', 'Sweater', 'Bodysuit'],
@@ -157,6 +170,54 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
     };
   }, [debouncedQ, step]);
 
+  useEffect(() => {
+    if (step !== 'scan' || !pickedLocalImage?.imageUrl) return;
+
+    const requestId = ++photoSearchRequestIdRef.current;
+    setPhotoLoading(true);
+    setPhotoError(null);
+    setPhotoResults([]);
+    setPhotoSource(null);
+    setPickedProduct(null);
+    setPhotoSuggestedQuery(null);
+
+    (async () => {
+      try {
+        const res = await fetch('/api/products/visual-search', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageDataUrl: pickedLocalImage.imageUrl }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          products?: PickedProduct[];
+          source?: string | null;
+          suggestedQuery?: string | null;
+          suggestedCategory?: 'tops' | 'bottoms' | 'outerwear' | 'footwear' | 'accessories' | null;
+          suggestedType?: string | null;
+          error?: { message?: string };
+        };
+        if (requestId !== photoSearchRequestIdRef.current) return;
+
+        if (!res.ok) {
+          setPhotoError(data.error?.message ?? 'Could not search by photo.');
+          return;
+        }
+
+        setPhotoResults(data.products ?? []);
+        setPhotoSource(data.source ?? null);
+        setPhotoSuggestedQuery(data.suggestedQuery ?? null);
+        if (data.suggestedCategory) setSelectedCategory(data.suggestedCategory);
+        if (data.suggestedType) setSelectedType(data.suggestedType);
+      } catch {
+        if (requestId !== photoSearchRequestIdRef.current) return;
+        setPhotoError('Could not search by photo. Check your connection and try again.');
+      } finally {
+        if (requestId === photoSearchRequestIdRef.current) setPhotoLoading(false);
+      }
+    })();
+  }, [step, pickedLocalImage?.imageUrl]);
+
   const goToDetailsFromMethod = () => {
     setPickedProduct(null);
     setPickedLocalImage(null);
@@ -169,6 +230,81 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
     setPickedLocalImage(null);
     setDetailsBackStep('picker');
     setStep('details');
+  };
+
+  const goToDetailsFromScan = (useProduct: boolean) => {
+    if (useProduct && pickedProduct) {
+      setPickedLocalImage(null);
+    } else {
+      setPickedProduct(null);
+    }
+    setDetailsBackStep('scan');
+    setStep('details');
+  };
+
+  const goToDetailsFromBarcode = () => {
+    if (!pickedProduct) return;
+    setPickedLocalImage(null);
+    setDetailsBackStep('barcode');
+    setStep('details');
+  };
+
+  const goToDetailsFromBarcodeWithProduct = (product: PickedProduct) => {
+    setPickedProduct(product);
+    setPickedLocalImage(null);
+    setDetailsBackStep('barcode');
+    setStep('details');
+  };
+
+  const lookupBarcode = async (raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length < 8) {
+      setBarcodeError('Enter at least 8 digits from the tag barcode.');
+      return;
+    }
+
+    setBarcodeLoading(true);
+    setBarcodeError(null);
+    setBarcodeResults([]);
+    setBarcodeSource(null);
+    setPickedProduct(null);
+    setPickedLocalImage(null);
+    setBarcodeScanned(digits);
+
+    try {
+      const res = await fetch(`/api/products/barcode?upc=${encodeURIComponent(digits)}`, {
+        credentials: 'include',
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        products?: PickedProduct[];
+        source?: string | null;
+        error?: { message?: string };
+      };
+
+      if (!res.ok) {
+        setBarcodeError(data.error?.message ?? 'Barcode lookup failed.');
+        return;
+      }
+
+      const products = data.products ?? [];
+      setBarcodeResults(products);
+      setBarcodeSource(data.source ?? null);
+
+      if (products.length === 0) {
+        setBarcodeError(
+          'No product in the database for this barcode. Check the digits on the tag, or use Take Photo to search by how the item looks.'
+        );
+        return;
+      }
+
+      if (products.length === 1) {
+        goToDetailsFromBarcodeWithProduct(products[0]);
+      }
+    } catch {
+      setBarcodeError('Could not look up this barcode. Check your connection and try again.');
+    } finally {
+      setBarcodeLoading(false);
+    }
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -202,9 +338,11 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
       }
 
       setPickedProduct(null);
+      setBarcodeResults([]);
+      setBarcodeSource(null);
       setPickedLocalImage({ imageUrl, title: fileTitle(file) });
-      setDetailsBackStep('method');
-      setStep('details');
+      setSelectedType('');
+      setStep('scan');
     } catch (error) {
       setFileLoading(false);
       setFileError(error instanceof Error ? error.message : 'Could not read that image.');
@@ -236,7 +374,18 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
     }, 1500);
   };
 
-  const modalWide = step === 'picker';
+  const modalWide =
+    step === 'picker' || step === 'scan' || (step === 'barcode' && barcodeResults.length > 0);
+
+  const sourceLabel = (source: string | null) => {
+    if (!source) return null;
+    if (source === 'upcitemdb') return 'UPC product database';
+    if (source === 'serpapi') return 'Google Shopping (SerpApi)';
+    if (source === 'google_lens') return 'Google Lens (SerpApi)';
+    if (source === 'google') return 'Google Programmable Search';
+    if (source === 'vision') return 'AI image analysis + shopping search';
+    return 'Openverse';
+  };
 
   return (
     <motion.div
@@ -326,7 +475,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   Take Photo
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: 500, opacity: 0.7 }}>
-                  Use your camera to capture the item
+                  Visual search — find similar items by how it looks
                 </div>
               </button>
 
@@ -346,7 +495,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   Upload Image
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: 500, opacity: 0.7 }}>
-                  Select a photo from your device
+                  Visual search — same as Take Photo, from your gallery
                 </div>
               </button>
 
@@ -365,6 +514,36 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   {fileError}
                 </p>
               )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('barcode');
+                  setBarcodeInput('');
+                  setBarcodeError(null);
+                  setBarcodeScanned(null);
+                  setBarcodeResults([]);
+                  setBarcodeSource(null);
+                  setPickedProduct(null);
+                  setPickedLocalImage(null);
+                  setPhotoResults([]);
+                  setPhotoSource(null);
+                }}
+                className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
+                style={{
+                  background: '#EDE9FE',
+                  border: '3px solid #000',
+                  boxShadow: '4px 4px 0 #000',
+                }}
+              >
+                <ScanBarcode className="w-8 h-8 mb-3" strokeWidth={2} />
+                <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '4px' }}>
+                  Scan barcode
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: 500, opacity: 0.7 }}>
+                  Product lookup — exact item from the UPC on the tag
+                </div>
+              </button>
 
               <button
                 onClick={() => {
@@ -569,6 +748,361 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
             </motion.div>
           )}
 
+          {step === 'barcode' && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-5"
+            >
+              <p style={{ fontSize: '15px', fontWeight: 500, lineHeight: 1.6 }}>
+                Scan the UPC or EAN on the tag. This looks up the registered product only — not a
+                photo search.
+              </p>
+
+              <BarcodeScanner
+                active={step === 'barcode' && !barcodeLoading && barcodeResults.length === 0}
+                onDetected={(code) => {
+                  setBarcodeInput(code);
+                  void lookupBarcode(code);
+                }}
+                onError={(msg) => setBarcodeError(msg)}
+              />
+
+              <div>
+                <label
+                  htmlFor="barcode-manual"
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                    display: 'block',
+                    marginBottom: '12px',
+                  }}
+                >
+                  OR ENTER BARCODE
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="barcode-manual"
+                    type="text"
+                    inputMode="numeric"
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="8–14 digit UPC / EAN"
+                    className="flex-1 px-4 py-3 rounded-xl outline-none"
+                    style={{
+                      border: '3px solid #000',
+                      fontSize: '15px',
+                      fontWeight: 500,
+                      boxShadow: '4px 4px 0 #000',
+                    }}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    disabled={barcodeLoading || barcodeInput.replace(/\D/g, '').length < 8}
+                    onClick={() => void lookupBarcode(barcodeInput)}
+                    className="px-5 py-3 rounded-xl text-white disabled:opacity-45 shrink-0"
+                    style={{
+                      background: '#000',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    LOOK UP
+                  </button>
+                </div>
+              </div>
+
+              {barcodeScanned && (
+                <p style={{ fontSize: '12px', fontWeight: 600, opacity: 0.65 }}>
+                  Barcode: {barcodeScanned}
+                </p>
+              )}
+
+              {barcodeLoading && (
+                <p role="status" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.7 }}>
+                  Looking up product…
+                </p>
+              )}
+
+              {barcodeError && (
+                <p role="alert" style={{ fontSize: '13px', fontWeight: 700, color: '#b91c1c' }}>
+                  {barcodeError}
+                </p>
+              )}
+
+              {barcodeSource && barcodeResults.length > 1 && (
+                <p style={{ fontSize: '11px', fontWeight: 600, opacity: 0.55 }}>
+                  Results via {sourceLabel(barcodeSource)}
+                </p>
+              )}
+
+              {barcodeResults.length > 1 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {barcodeResults.map((p) => {
+                    const selected = pickedProduct?.id === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPickedProduct(p)}
+                        className="rounded-2xl text-left overflow-hidden transition-[transform,box-shadow] duration-200 ease-out hover:scale-[1.02] active:scale-[0.99]"
+                        style={{
+                          border: selected ? '3px solid #0284c7' : '3px solid #000',
+                          boxShadow: selected ? '4px 4px 0 #0284c7' : '4px 4px 0 #000',
+                          background: '#fafafa',
+                        }}
+                      >
+                        <div className="relative aspect-square w-full bg-neutral-100">
+                          <Image
+                            src={p.thumbnailUrl || p.imageUrl}
+                            alt={p.title}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 640px) 45vw, 200px"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="p-2">
+                          <div
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              lineHeight: 1.3,
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {p.title}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('method');
+                    setBarcodeInput('');
+                    setBarcodeError(null);
+                    setBarcodeResults([]);
+                    setBarcodeSource(null);
+                  }}
+                  className="flex-1 px-6 py-3 rounded-full"
+                  style={{
+                    background: '#f5f5f5',
+                    border: '2px solid #000',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  BACK
+                </button>
+                {barcodeResults.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={goToDetailsFromBarcode}
+                    disabled={!pickedProduct}
+                    className="flex-1 px-6 py-3 rounded-full text-white disabled:opacity-45"
+                    style={{
+                      background: '#000',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    CONTINUE
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {step === 'scan' && pickedLocalImage && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-5"
+            >
+              <p style={{ fontSize: '15px', fontWeight: 500, lineHeight: 1.6 }}>
+                Searching by photo (visual match). Pick a similar product online, or keep your
+                picture as-is.
+              </p>
+
+              <motion.div className="flex gap-4 items-start">
+                <div
+                  className="relative w-28 h-28 rounded-xl overflow-hidden shrink-0"
+                  style={{ border: '3px solid #000', boxShadow: '4px 4px 0 #000' }}
+                >
+                  <Image
+                    src={pickedLocalImage.imageUrl}
+                    alt="Your scan"
+                    fill
+                    className="object-cover"
+                    sizes="112px"
+                    unoptimized
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>
+                    YOUR SCAN
+                  </p>
+                  {photoSuggestedQuery && (
+                    <p style={{ fontSize: '13px', fontWeight: 500, opacity: 0.75, lineHeight: 1.5 }}>
+                      Detected: &ldquo;{photoSuggestedQuery}&rdquo;
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+
+              {photoSource && (
+                <p style={{ fontSize: '11px', fontWeight: 600, opacity: 0.55 }}>
+                  Results via {sourceLabel(photoSource)}
+                  {photoSource === 'serpapi' || photoSource === 'google_lens'
+                    ? ' — check retailer listings for accuracy.'
+                    : '.'}
+                </p>
+              )}
+
+              <motion.div className="min-h-[200px]" aria-live="polite" aria-busy={photoLoading}>
+                {photoLoading && (
+                  <>
+                    <span className="sr-only">Searching by photo…</span>
+                    <motion.div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="rounded-2xl overflow-hidden"
+                          style={{ border: '3px solid #000', boxShadow: '4px 4px 0 #000', background: '#fafafa' }}
+                        >
+                          <Skeleton className="aspect-square w-full rounded-none" />
+                          <div className="p-2 space-y-1.5">
+                            <Skeleton className="h-3 w-[90%]" />
+                            <Skeleton className="h-3 w-[60%]" />
+                          </div>
+                        </div>
+                      ))}
+                    </motion.div>
+                  </>
+                )}
+                {!photoLoading && photoError && (
+                  <p className="text-center py-8" role="alert" style={{ fontSize: '14px', fontWeight: 600, color: '#b91c1c' }}>
+                    {photoError}
+                  </p>
+                )}
+                {!photoLoading && !photoError && photoResults.length === 0 && (
+                  <p className="text-center py-8" style={{ fontSize: '14px', fontWeight: 500, opacity: 0.55 }}>
+                    No close matches found. You can still add your photo to the wardrobe.
+                  </p>
+                )}
+                {!photoLoading && photoResults.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {photoResults.map((p) => {
+                      const selected = pickedProduct?.id === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setPickedProduct(p)}
+                          className="rounded-2xl text-left overflow-hidden transition-[transform,box-shadow] duration-200 ease-out hover:scale-[1.02] active:scale-[0.99]"
+                          style={{
+                            border: selected ? '3px solid #0284c7' : '3px solid #000',
+                            boxShadow: selected ? '4px 4px 0 #0284c7' : '4px 4px 0 #000',
+                            background: '#fafafa',
+                          }}
+                        >
+                          <motion.div className="relative aspect-square w-full bg-neutral-100">
+                            <Image
+                              src={p.thumbnailUrl || p.imageUrl}
+                              alt={p.title}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 640px) 45vw, 200px"
+                              unoptimized
+                            />
+                          </motion.div>
+                          <div className="p-2">
+                            <div
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                lineHeight: 1.3,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {p.title}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('method');
+                    setPickedLocalImage(null);
+                    setPickedProduct(null);
+                  }}
+                  className="flex-1 px-6 py-3 rounded-full"
+                  style={{
+                    background: '#f5f5f5',
+                    border: '2px solid #000',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  BACK
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToDetailsFromScan(false)}
+                  className="flex-1 px-6 py-3 rounded-full"
+                  style={{
+                    background: '#fff',
+                    border: '2px solid #000',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  USE MY PHOTO
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToDetailsFromScan(true)}
+                  disabled={!pickedProduct}
+                  className="flex-1 px-6 py-3 rounded-full text-white disabled:opacity-45"
+                  style={{
+                    background: '#000',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  USE SELECTED
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           {step === 'details' && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -658,6 +1192,10 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   onClick={() => {
                     if (detailsBackStep === 'picker') {
                       setStep('picker');
+                    } else if (detailsBackStep === 'scan') {
+                      setStep('scan');
+                    } else if (detailsBackStep === 'barcode') {
+                      setStep('barcode');
                     } else {
                       setStep('method');
                       setPickedProduct(null);
