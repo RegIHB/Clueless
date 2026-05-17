@@ -320,6 +320,37 @@ function normalizeWardrobeCategory(raw: string): WardrobeCategory {
   if (normalized === 'bottoms' || normalized === 'bottom' || normalized === 'lower' || normalized === 'lower_body') {
     return 'bottoms';
   }
+  if (
+    [
+      'outerwear',
+      'coat',
+      'jacket',
+      'blazer',
+      'cardigan',
+      'gilet',
+      'parka',
+      'trench',
+      'windbreaker',
+      'hoodie',
+    ].includes(normalized)
+  ) {
+    return 'outerwear';
+  }
+  if (
+    [
+      'footwear',
+      'shoes',
+      'boots',
+      'trainers',
+      'sneakers',
+      'heels',
+      'sandals',
+      'loafers',
+      'flats',
+    ].includes(normalized)
+  ) {
+    return 'footwear';
+  }
   return 'accessories';
 }
 
