@@ -320,6 +320,37 @@ function normalizeWardrobeCategory(raw: string): WardrobeCategory {
   if (normalized === 'bottoms' || normalized === 'bottom' || normalized === 'lower' || normalized === 'lower_body') {
     return 'bottoms';
   }
+  if (
+    [
+      'outerwear',
+      'coat',
+      'jacket',
+      'blazer',
+      'cardigan',
+      'gilet',
+      'parka',
+      'trench',
+      'windbreaker',
+      'hoodie',
+    ].includes(normalized)
+  ) {
+    return 'outerwear';
+  }
+  if (
+    [
+      'footwear',
+      'shoes',
+      'boots',
+      'trainers',
+      'sneakers',
+      'heels',
+      'sandals',
+      'loafers',
+      'flats',
+    ].includes(normalized)
+  ) {
+    return 'footwear';
+  }
   return 'accessories';
 }
 
@@ -3098,12 +3129,14 @@ export default function App() {
                     )}
 
                     {!tryOnImageUrl && selectedOutfit.outerwear && (
+                      // TODO: toggle outerwear z-index above tops for layering mode
                       <motion.div
                         key={selectedOutfit.outerwear.code}
                         initial={false}
                         animate={{ scale: 1, opacity: 1 }}
                         transition={{ type: 'spring', damping: 20, stiffness: 300 }}
                         className="absolute inset-0 pointer-events-none"
+                        style={{ zIndex: 9 }}
                       >
                         <ClothingSticker
                           type={selectedOutfit.outerwear.type}
