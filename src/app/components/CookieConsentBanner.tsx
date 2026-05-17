@@ -1,31 +1,42 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
+import { CookiePolicyContent } from './CookiePolicyContent';
+
+export type CookieBannerView = 'compact' | 'details';
 
 type CookieConsentBannerProps = {
   open: boolean;
+  view: CookieBannerView;
+  onViewChange: (view: CookieBannerView) => void;
   onAcceptAll: () => void;
   onEssentialOnly: () => void;
 };
 
-export function CookieConsentBanner({ open, onAcceptAll, onEssentialOnly }: CookieConsentBannerProps) {
+export function CookieConsentBanner({
+  open,
+  view,
+  onViewChange,
+  onAcceptAll,
+  onEssentialOnly,
+}: CookieConsentBannerProps) {
   const acceptRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const id = window.requestAnimationFrame(() => acceptRef.current?.focus());
     return () => window.cancelAnimationFrame(id);
-  }, [open]);
+  }, [open, view]);
 
   return (
     <AnimatePresence>
       {open && (
         <motion.div
           role="dialog"
+          aria-modal="true"
           aria-labelledby="cookie-consent-title"
-          aria-describedby="cookie-consent-desc"
+          aria-describedby={view === 'compact' ? 'cookie-consent-desc' : 'cookie-policy-body'}
           aria-live="polite"
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -46,37 +57,70 @@ export function CookieConsentBanner({ open, onAcceptAll, onEssentialOnly }: Cook
               className="mb-1 tracking-[0.08em] uppercase"
               style={{ fontSize: '10px', fontWeight: 900, opacity: 0.55 }}
             >
-              Cookies
+              {view === 'details' ? 'Cookie policy' : 'Cookies'}
             </p>
-            <p
-              id="cookie-consent-desc"
-              className="mb-4 text-pretty"
-              style={{ fontSize: '13px', lineHeight: 1.55, fontWeight: 500, opacity: 0.85 }}
-            >
-              We use essential storage so sign-in, your wardrobe, and preferences work. With your
-              permission we also load privacy-friendly analytics to improve Clueless.{' '}
-              <Link href="/cookies" className="underline underline-offset-2 hover:opacity-70">
-                Cookie policy
-              </Link>
-            </p>
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-              <button
-                type="button"
-                onClick={onEssentialOnly}
-                className="w-full sm:w-auto rounded-full border-2 border-black px-5 py-2.5 transition-colors hover:bg-black/5 active:bg-black/10"
-                style={{ fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em' }}
+
+            {view === 'compact' ? (
+              <>
+                <p
+                  id="cookie-consent-desc"
+                  className="mb-4 text-pretty"
+                  style={{ fontSize: '13px', lineHeight: 1.55, fontWeight: 500, opacity: 0.85 }}
+                >
+                  We use essential storage so sign-in, your wardrobe, and preferences work. With your
+                  permission we also load privacy-friendly analytics to improve Clueless.{' '}
+                  <button
+                    type="button"
+                    onClick={() => onViewChange('details')}
+                    className="underline underline-offset-2 hover:opacity-70"
+                    style={{ fontWeight: 600 }}
+                  >
+                    Cookie policy
+                  </button>
+                </p>
+              </>
+            ) : (
+              <div
+                id="cookie-policy-body"
+                className="mb-4 max-h-[min(42vh,320px)] space-y-3 overflow-y-auto text-pretty pr-1"
+                style={{ fontSize: '13px', lineHeight: 1.6, fontWeight: 500, opacity: 0.85 }}
               >
-                ESSENTIAL ONLY
-              </button>
-              <button
-                ref={acceptRef}
-                type="button"
-                onClick={onAcceptAll}
-                className="w-full sm:w-auto rounded-full border-2 border-black px-5 py-2.5 text-white transition-opacity hover:opacity-90 active:opacity-80"
-                style={{ background: '#000', fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em' }}
-              >
-                ACCEPT ALL
-              </button>
+                <CookiePolicyContent />
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              {view === 'details' ? (
+                <button
+                  type="button"
+                  onClick={() => onViewChange('compact')}
+                  className="w-full sm:w-auto rounded-full border-2 border-black px-4 py-2 transition-colors hover:bg-black/5"
+                  style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}
+                >
+                  BACK
+                </button>
+              ) : (
+                <span className="hidden sm:block sm:flex-1" aria-hidden />
+              )}
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={onEssentialOnly}
+                  className="w-full sm:w-auto rounded-full border-2 border-black px-5 py-2.5 transition-colors hover:bg-black/5 active:bg-black/10"
+                  style={{ fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em' }}
+                >
+                  ESSENTIAL ONLY
+                </button>
+                <button
+                  ref={acceptRef}
+                  type="button"
+                  onClick={onAcceptAll}
+                  className="w-full sm:w-auto rounded-full border-2 border-black px-5 py-2.5 text-white transition-opacity hover:opacity-90 active:opacity-80"
+                  style={{ background: '#000', fontSize: '11px', fontWeight: 800, letterSpacing: '0.06em' }}
+                >
+                  ACCEPT ALL
+                </button>
+              </div>
             </div>
           </div>
         </motion.div>
