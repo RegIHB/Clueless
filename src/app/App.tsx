@@ -45,9 +45,15 @@ const AUTH_HYDRATION_TELEMETRY =
 
 const LOCAL_SAVED_OUTFITS_KEY = 'clueless_saved_outfits_v1';
 const LOCAL_SAVED_OUTFITS_USER_PREFIX = 'clueless_saved_outfits_user_v1';
-const LOCAL_TRYON_HISTORY_KEY = 'clueless_tryon_history_v1';
-const LOCAL_SELECTED_OUTFIT_KEY = 'clueless_selected_outfit_v1';
-const LOCAL_SYNC_QUEUE_KEY = 'clueless_sync_queue_v1';
+const LOCAL_TRYON_HISTORY_PREFIX = 'clueless_tryon_history_v1';
+const LOCAL_SELECTED_OUTFIT_PREFIX = 'clueless_selected_outfit_v1';
+const LOCAL_SYNC_QUEUE_PREFIX = 'clueless_sync_queue_v1';
+const LOCAL_SELFIE_PREFIX = 'clueless_selfie_v1';
+
+function tryOnHistoryKey(userId: string): string { return `${LOCAL_TRYON_HISTORY_PREFIX}:${userId}`; }
+function selectedOutfitKey(userId: string): string { return `${LOCAL_SELECTED_OUTFIT_PREFIX}:${userId}`; }
+function syncQueueKey(userId: string): string { return `${LOCAL_SYNC_QUEUE_PREFIX}:${userId}`; }
+function selfieKey(userId: string): string { return `${LOCAL_SELFIE_PREFIX}:${userId}`; }
 const TRYON_HISTORY_PAGE_SIZE = 9;
 
 const DEFAULT_STYLE_PREFERENCES: Required<ProfilePreferences> = {
@@ -109,10 +115,11 @@ const VTO_STAGE_LABELS: Record<VtoStage, string> = {
   final: 'Final Result',
 };
 
-function loadTryOnHistory(): TryOnHistoryEntry[] {
+function loadTryOnHistory(userId?: string): TryOnHistoryEntry[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(LOCAL_TRYON_HISTORY_KEY);
+    const key = userId ? tryOnHistoryKey(userId) : LOCAL_TRYON_HISTORY_PREFIX;
+    const raw = localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as TryOnHistoryEntry[];
     return Array.isArray(parsed) ? parsed : [];
@@ -252,10 +259,11 @@ function mergeRemoteAndLocalSavedOutfits(remote: SavedOutfit[], local: SavedOutf
   return merged.sort((a, b) => b.savedAt.getTime() - a.savedAt.getTime());
 }
 
-function loadSyncQueue(): SyncQueueItem[] {
+function loadSyncQueue(userId?: string): SyncQueueItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(LOCAL_SYNC_QUEUE_KEY);
+    const key = userId ? syncQueueKey(userId) : LOCAL_SYNC_QUEUE_PREFIX;
+    const raw = localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as SyncQueueItem[];
     return Array.isArray(parsed) ? parsed : [];
@@ -419,8 +427,10 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const uid = wardrobeUserIdRef.current;
+    if (!uid) return;
     try {
-      localStorage.setItem(LOCAL_SYNC_QUEUE_KEY, JSON.stringify(syncQueue));
+      localStorage.setItem(syncQueueKey(uid), JSON.stringify(syncQueue));
     } catch {
       // ignore storage quota issues
     }
@@ -549,6 +559,11 @@ export default function App() {
     wardrobeUserIdRef.current = userId;
     setBillingUserId(userId);
 
+    setTryOnHistory(loadTryOnHistory(userId));
+    setSyncQueue(loadSyncQueue(userId));
+    const localSelfie = typeof window !== 'undefined' ? localStorage.getItem(selfieKey(userId)) : null;
+    if (localSelfie) setUserSelfie(localSelfie);
+
     if (savedOutfitsUserIdRef.current !== null && savedOutfitsUserIdRef.current !== userId) {
       setSavedOutfits([]);
     }
@@ -661,13 +676,6 @@ export default function App() {
     setDeletingItemCode(null);
     setSyncQueue([]);
     setIsSyncProcessing(false);
-
-    try {
-      localStorage.removeItem(LOCAL_TRYON_HISTORY_KEY);
-      localStorage.removeItem(LOCAL_SELECTED_OUTFIT_KEY);
-      localStorage.removeItem(LOCAL_SYNC_QUEUE_KEY);
-      localStorage.removeItem('userSelfie');
-    } catch { /* quota or security errors in rare contexts */ }
     setTryOnHistory([]);
   }, []);
 
@@ -795,18 +803,22 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const uid = wardrobeUserIdRef.current;
+    if (!uid) return;
     const out = {
       tops: selectedOutfit.tops?.code,
       bottoms: selectedOutfit.bottoms?.code,
       accessories: selectedOutfit.accessories?.code,
     };
-    localStorage.setItem(LOCAL_SELECTED_OUTFIT_KEY, JSON.stringify(out));
+    localStorage.setItem(selectedOutfitKey(uid), JSON.stringify(out));
   }, [selectedOutfit]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || wardrobeItems.length === 0) return;
+    const uid = wardrobeUserIdRef.current;
+    if (!uid) return;
     try {
-      const raw = localStorage.getItem(LOCAL_SELECTED_OUTFIT_KEY);
+      const raw = localStorage.getItem(selectedOutfitKey(uid));
       if (!raw) return;
       const parsed = JSON.parse(raw) as {
         tops?: string;
@@ -913,7 +925,7 @@ export default function App() {
 
   useEffect(() => {
     if (SUPABASE_ON) return;
-    const storedSelfie = localStorage.getItem('userSelfie');
+    const storedSelfie = localStorage.getItem(LOCAL_SELFIE_PREFIX);
     if (storedSelfie) setUserSelfie(storedSelfie);
   }, []);
 
@@ -1000,7 +1012,8 @@ export default function App() {
   const handleSelfieUpload = async (imageUrl: string) => {
     setUserSelfie(imageUrl);
     setTryOnImageUrl(null);
-    localStorage.setItem('userSelfie', imageUrl);
+    const uid = wardrobeUserIdRef.current;
+    if (uid) localStorage.setItem(selfieKey(uid), imageUrl);
     setShowSelfieUpload(false);
     showToast('Profile photo uploaded!');
     if (SUPABASE_ON) {
@@ -1319,7 +1332,9 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(LOCAL_TRYON_HISTORY_KEY, JSON.stringify(tryOnHistory));
+    const uid = wardrobeUserIdRef.current;
+    if (!uid) return;
+    localStorage.setItem(tryOnHistoryKey(uid), JSON.stringify(tryOnHistory));
   }, [tryOnHistory]);
 
   useEffect(() => {
