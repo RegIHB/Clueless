@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Camera, Search, Upload, X, Check, ScanBarcode } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
 import { BarcodeScanner } from './BarcodeScanner';
+import { preloadBackgroundRemoval, removeBackground } from '@/lib/removeBackground';
 
 type PickedProduct = {
   id: string;
@@ -33,7 +34,16 @@ function fileTitle(file: File): string {
   return file.name.replace(/\.[^.]+$/, '').trim() || 'Uploaded wardrobe photo';
 }
 
-function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+function validateUploadImage(file: Blob): void {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Choose an image file.');
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error('Image is too large. Choose a photo under 10 MB.');
+  }
+}
+
+function loadImageFromFile(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const image = new window.Image();
@@ -49,12 +59,9 @@ function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   });
 }
 
-async function compressFileToDataUrl(file: File): Promise<string> {
+async function compressFileToDataUrl(file: Blob): Promise<string> {
   if (!file.type.startsWith('image/')) {
     throw new Error('Choose an image file.');
-  }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    throw new Error('Image is too large. Choose a photo under 10 MB.');
   }
 
   const image = await loadImageFromFile(file);
@@ -126,6 +133,10 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
     footwear: ['Sneakers', 'Boots', 'Heels', 'Sandals', 'Flats', 'Loafers'],
     accessories: ['Hat', 'Scarf', 'Belt', 'Bag', 'Sunglasses', 'Jewellery']
   };
+
+  useEffect(() => {
+    void preloadBackgroundRemoval().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(searchInput.trim()), 420);
@@ -315,27 +326,16 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
     setFileLoading(true);
     setFileError(null);
     try {
-      let imageUrl = await compressFileToDataUrl(file);
+      validateUploadImage(file);
       setFileLoading(false);
 
       setRemovingBg(true);
-      try {
-        const res = await fetch('/api/remove-bg', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: imageUrl }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (typeof data.image === 'string' && data.image.startsWith('data:image/')) {
-            imageUrl = data.image;
-          }
-        }
-      } catch {
-        /* silently use original image */
-      } finally {
-        setRemovingBg(false);
-      }
+      const cleanedImage = await removeBackground(file);
+      setRemovingBg(false);
+
+      setFileLoading(true);
+      const imageUrl = await compressFileToDataUrl(cleanedImage);
+      setFileLoading(false);
 
       setPickedProduct(null);
       setBarcodeResults([]);
@@ -345,6 +345,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
       setStep('scan');
     } catch (error) {
       setFileLoading(false);
+      setRemovingBg(false);
       setFileError(error instanceof Error ? error.message : 'Could not read that image.');
     }
   };
@@ -506,7 +507,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               )}
               {removingBg && (
                 <p role="status" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.7 }}>
-                  Cleaning up image…
+                  Cleaning up image...
                 </p>
               )}
               {fileError && (
