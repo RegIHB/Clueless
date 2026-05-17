@@ -135,7 +135,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
   };
 
   useEffect(() => {
-    void preloadBackgroundRemoval();
+    void preloadBackgroundRemoval().catch(() => undefined);
   }, []);
 
   useEffect(() => {
