@@ -102,6 +102,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
   const [pickedLocalImage, setPickedLocalImage] = useState<PickedLocalImage | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
+  const [removingBg, setRemovingBg] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -176,15 +177,35 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
     setFileLoading(true);
     setFileError(null);
     try {
-      const imageUrl = await compressFileToDataUrl(file);
+      let imageUrl = await compressFileToDataUrl(file);
+      setFileLoading(false);
+
+      setRemovingBg(true);
+      try {
+        const res = await fetch('/api/remove-bg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: imageUrl }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (typeof data.image === 'string' && data.image.startsWith('data:image/')) {
+            imageUrl = data.image;
+          }
+        }
+      } catch {
+        /* silently use original image */
+      } finally {
+        setRemovingBg(false);
+      }
+
       setPickedProduct(null);
       setPickedLocalImage({ imageUrl, title: fileTitle(file) });
       setDetailsBackStep('method');
       setStep('details');
     } catch (error) {
-      setFileError(error instanceof Error ? error.message : 'Could not read that image.');
-    } finally {
       setFileLoading(false);
+      setFileError(error instanceof Error ? error.message : 'Could not read that image.');
     }
   };
 
@@ -290,7 +311,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                disabled={fileLoading}
+                disabled={fileLoading || removingBg}
                 className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#FFE5F1',
@@ -310,7 +331,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               <button
                 type="button"
                 onClick={() => uploadInputRef.current?.click()}
-                disabled={fileLoading}
+                disabled={fileLoading || removingBg}
                 className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#FFE5C8',
@@ -330,6 +351,11 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               {fileLoading && (
                 <p role="status" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.7 }}>
                   Preparing your image…
+                </p>
+              )}
+              {removingBg && (
+                <p role="status" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.7 }}>
+                  Cleaning up image…
                 </p>
               )}
               {fileError && (
