@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { Camera, Search, Upload, X, Check, ScanBarcode } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
 import { BarcodeScanner } from './BarcodeScanner';
-import { removeBackground } from '@/lib/removeBackground';
+import { preloadBackgroundRemoval, removeBackground } from '@/lib/removeBackground';
 
 type PickedProduct = {
   id: string;
@@ -133,6 +133,10 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
     footwear: ['Sneakers', 'Boots', 'Heels', 'Sandals', 'Flats', 'Loafers'],
     accessories: ['Hat', 'Scarf', 'Belt', 'Bag', 'Sunglasses', 'Jewellery']
   };
+
+  useEffect(() => {
+    void preloadBackgroundRemoval();
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(searchInput.trim()), 420);
