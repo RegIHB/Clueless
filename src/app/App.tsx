@@ -37,8 +37,22 @@ import type { Session } from '@supabase/supabase-js';
 import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
 import type { CreateTryOnJobResponse, TryOnJobSnapshot, VtoErrorCode, VtoStage } from '@/lib/vto/contracts';
 import { getVtoCopy } from '@/lib/vto/copy';
+import { useCookieConsent } from './components/CookieConsentProvider';
 
 const SUPABASE_ON = isSupabaseConfigured();
+const PRO_PRICE_MONTHLY_EUR = 12;
+const PRO_PRICE_OFFER_EUR = 6;
+
+const FOOTER_PRODUCT_LINKS = [
+  { label: 'Features', href: '#how-it-works' },
+  { label: 'Pricing', href: '#pricing' },
+] as const;
+
+const FOOTER_LEGAL_LINKS = [
+  { label: 'Privacy Policy', href: '/privacy' },
+  { label: 'Terms of Service', href: '/terms' },
+  { label: 'Cookie Policy', href: '/cookies' },
+] as const;
 const AUTH_HYDRATION_TELEMETRY =
   process.env.NODE_ENV !== 'production' ||
   process.env.NEXT_PUBLIC_AUTH_HYDRATION_TELEMETRY === '1';
@@ -46,6 +60,7 @@ const AUTH_HYDRATION_TELEMETRY =
 const LOCAL_SAVED_OUTFITS_KEY = 'clueless_saved_outfits_v1';
 const LOCAL_SAVED_OUTFITS_USER_PREFIX = 'clueless_saved_outfits_user_v1';
 const LOCAL_TRYON_HISTORY_KEY = 'clueless_tryon_history_v1';
+const LOCAL_TRYON_HISTORY_USER_PREFIX = 'clueless_tryon_history_user_v1';
 const LOCAL_SELECTED_OUTFIT_KEY = 'clueless_selected_outfit_v1';
 const LOCAL_SYNC_QUEUE_KEY = 'clueless_sync_queue_v1';
 const TRYON_HISTORY_PAGE_SIZE = 9;
@@ -109,15 +124,56 @@ const VTO_STAGE_LABELS: Record<VtoStage, string> = {
   final: 'Final Result',
 };
 
-function loadTryOnHistory(): TryOnHistoryEntry[] {
-  if (typeof window === 'undefined') return [];
+function tryOnHistoryUserKey(userId: string): string {
+  return `${LOCAL_TRYON_HISTORY_USER_PREFIX}:${userId}`;
+}
+
+function isValidTryOnHistoryEntry(row: unknown): row is TryOnHistoryEntry {
+  if (!row || typeof row !== 'object') return false;
+  const entry = row as TryOnHistoryEntry;
+  if (typeof entry.id !== 'string' || entry.id.length === 0) return false;
+  if (typeof entry.imageUrl !== 'string' || !entry.imageUrl.startsWith('http')) return false;
+  if (typeof entry.createdAt !== 'string' || Number.isNaN(Date.parse(entry.createdAt))) return false;
   try {
-    const raw = localStorage.getItem(LOCAL_TRYON_HISTORY_KEY);
+    const parsed = new URL(entry.imageUrl);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function normalizeTryOnHistory(value: unknown): TryOnHistoryEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isValidTryOnHistoryEntry);
+}
+
+function loadTryOnHistoryForUser(userId: string | null): TryOnHistoryEntry[] {
+  if (!userId || typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(tryOnHistoryUserKey(userId));
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as TryOnHistoryEntry[];
-    return Array.isArray(parsed) ? parsed : [];
+    return normalizeTryOnHistory(JSON.parse(raw));
   } catch {
     return [];
+  }
+}
+
+function persistTryOnHistoryForUser(userId: string | null, history: TryOnHistoryEntry[]): void {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(tryOnHistoryUserKey(userId), JSON.stringify(history));
+  } catch {
+    // ignore quota/storage issues
+  }
+}
+
+function clearSessionScopedLocalStorage(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(LOCAL_TRYON_HISTORY_KEY);
+    localStorage.removeItem('userSelfie');
+  } catch {
+    // ignore
   }
 }
 
@@ -313,6 +369,7 @@ function normalizeStylePreferences(value: ProfilePreferences | null | undefined)
 
 export default function App() {
   const router = useRouter();
+  const { openPreferences: openCookiePreferences } = useCookieConsent();
   const [isLoggedIn, setIsLoggedIn] = useState(!SUPABASE_ON);
   const [billingUserId, setBillingUserId] = useState<string | null>(null);
   const [isPro, setIsPro] = useState(false);
@@ -361,7 +418,7 @@ export default function App() {
   const [vtoStatusMessage, setVtoStatusMessage] = useState('Upload your photo to begin');
   const [vtoJobId, setVtoJobId] = useState<string | null>(null);
   const [vtoError, setVtoError] = useState<{ code?: VtoErrorCode; message: string } | null>(null);
-  const [tryOnHistory, setTryOnHistory] = useState<TryOnHistoryEntry[]>(loadTryOnHistory);
+  const [tryOnHistory, setTryOnHistory] = useState<TryOnHistoryEntry[]>([]);
   const [visibleTryOnCount, setVisibleTryOnCount] = useState(TRYON_HISTORY_PAGE_SIZE);
   const [syncQueue, setSyncQueue] = useState<SyncQueueItem[]>(loadSyncQueue);
   const [isSyncProcessing, setIsSyncProcessing] = useState(false);
@@ -405,6 +462,7 @@ export default function App() {
   const wardrobeUserIdRef = useRef<string | null>(null);
   /** Last user id we loaded saved outfits for — clear list when switching accounts. */
   const savedOutfitsUserIdRef = useRef<string | null>(null);
+  const tryOnHistoryUserIdRef = useRef<string | null>(null);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -549,6 +607,21 @@ export default function App() {
     }
     savedOutfitsUserIdRef.current = userId;
 
+    if (tryOnHistoryUserIdRef.current !== null && tryOnHistoryUserIdRef.current !== userId) {
+      setTryOnHistory([]);
+      setTryOnImageUrl(null);
+      setTryOnPreviewUrl(null);
+    }
+    tryOnHistoryUserIdRef.current = userId;
+    setTryOnHistory(loadTryOnHistoryForUser(userId));
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(LOCAL_TRYON_HISTORY_KEY);
+      } catch {
+        // ignore
+      }
+    }
+
     // Profile is small and orthogonal to wardrobe sync; load it in parallel.
     const profilePromise = fetchProfile(supabase, userId).then(async (p) => {
       if (p) return p;
@@ -656,6 +729,11 @@ export default function App() {
     setDeletingItemCode(null);
     setSyncQueue([]);
     setIsSyncProcessing(false);
+    setTryOnHistory([]);
+    setTryOnPreviewUrl(null);
+    setVisibleTryOnCount(TRYON_HISTORY_PAGE_SIZE);
+    tryOnHistoryUserIdRef.current = null;
+    clearSessionScopedLocalStorage();
   }, []);
 
   const handleAuthDialogSignedIn = useCallback(async () => {
@@ -703,6 +781,18 @@ export default function App() {
           setSavedOutfits([]);
           setWardrobeItems([]);
           setSelectedOutfit({});
+          setTryOnImageUrl(null);
+          setTryOnPreviewUrl(null);
+          tryOnHistoryUserIdRef.current = newUserId;
+          // Do not migrate the legacy global key here — it may still hold the prior account's history.
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.removeItem(LOCAL_TRYON_HISTORY_KEY);
+            } catch {
+              // ignore
+            }
+          }
+          setTryOnHistory(loadTryOnHistoryForUser(newUserId));
         }
 
         // Hydrate (idempotent + cheap when state already matches).
@@ -1012,33 +1102,48 @@ export default function App() {
       return;
     }
 
+    const userId = wardrobeUserIdRef.current ?? billingUserId;
+    if (!userId || !isLoggedIn) {
+      showToast('Sign in to save style preferences.', 'error');
+      return;
+    }
+
+    const next = {
+      styleVibe: stylePreferencesDraft.styleVibe,
+      colorPalette: stylePreferencesDraft.colorPalette,
+      notes: stylePreferencesDraft.notes.trim().slice(0, 500),
+    };
+
     setIsSavingPreferences(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 15_000);
     try {
-      const supabase = createBrowserSupabaseClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        showToast('Sign in to save style preferences.', 'error');
-        return;
-      }
-      const next = {
-        styleVibe: stylePreferencesDraft.styleVibe,
-        colorPalette: stylePreferencesDraft.colorPalette,
-        notes: stylePreferencesDraft.notes.trim().slice(0, 500),
+      const response = await fetch('/api/profile/style-preferences', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+        signal: controller.signal,
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: { message?: string };
       };
-      const ok = await updateProfile(supabase, user.id, { style_preferences: next });
-      if (!ok) {
-        showToast('Could not save style preferences. Try again.', 'error');
+      if (!response.ok) {
+        showToast(payload.error?.message || 'Could not save style preferences. Try again.', 'error');
         return;
       }
       setStylePreferences(next);
       setStylePreferencesDraft(next);
       showToast('Style preferences saved');
     } catch (e) {
+      const aborted = e instanceof Error && e.name === 'AbortError';
       console.error('Failed to save style preferences', e);
-      showToast('Could not save style preferences. Try again.', 'error');
+      showToast(
+        aborted ? 'Save timed out. Check your connection and try again.' : 'Could not save style preferences. Try again.',
+        'error'
+      );
     } finally {
+      window.clearTimeout(timeoutId);
       setIsSavingPreferences(false);
     }
   };
@@ -1304,9 +1409,19 @@ export default function App() {
   };
 
 
+  const removeTryOnHistoryEntry = useCallback((entryId: string) => {
+    setTryOnHistory((prev) => {
+      const removed = prev.find((entry) => entry.id === entryId);
+      if (!removed) return prev;
+      setTryOnImageUrl((current) => (current === removed.imageUrl ? null : current));
+      setTryOnPreviewUrl((current) => (current === removed.imageUrl ? null : current));
+      return prev.filter((entry) => entry.id !== entryId);
+    });
+  }, []);
+
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(LOCAL_TRYON_HISTORY_KEY, JSON.stringify(tryOnHistory));
+    const uid = tryOnHistoryUserIdRef.current ?? wardrobeUserIdRef.current;
+    persistTryOnHistoryForUser(uid, tryOnHistory);
   }, [tryOnHistory]);
 
   useEffect(() => {
@@ -1604,6 +1719,7 @@ export default function App() {
   };
 
   const activeTryOnGarments = resolveTryOnGarments(selectedOutfit, selectedCategory);
+  const latestTryOn = tryOnHistory[0] ?? null;
   const isBrowserOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
   const syncState: 'synced' | 'syncing' | 'retrying' | 'offline_cached' =
     syncQueue.length === 0
@@ -2071,24 +2187,31 @@ export default function App() {
                         </span>
                       )}
                     </div>
-                    {tryOnHistory[0]?.imageUrl ? (
+                    {latestTryOn?.imageUrl ? (
                       <button
                         type="button"
                         onClick={() => {
                           setCurrentView('wardrobe');
-                          setTryOnImageUrl(tryOnHistory[0].imageUrl);
+                          setTryOnImageUrl(latestTryOn.imageUrl);
                           document.getElementById('wardrobe-panel')?.scrollIntoView({ behavior: 'smooth' });
                         }}
                         className="w-full text-left"
                       >
                         <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-black mb-3">
-                          <Image src={tryOnHistory[0].imageUrl} alt="Most recent try-on" fill unoptimized className="object-cover" />
+                          <Image
+                            src={latestTryOn.imageUrl}
+                            alt="Most recent try-on"
+                            fill
+                            unoptimized
+                            className="object-cover"
+                            onError={() => removeTryOnHistoryEntry(latestTryOn.id)}
+                          />
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 700 }}>
                           {t('Re-open your latest slay', 'View your latest try-on')}
                         </div>
                         <div style={{ fontSize: '11px', fontWeight: 500, opacity: 0.7 }}>
-                          {new Date(tryOnHistory[0].createdAt).toLocaleString()}
+                          {new Date(latestTryOn.createdAt).toLocaleString()}
                         </div>
                       </button>
                     ) : (
@@ -3104,7 +3227,7 @@ export default function App() {
                         className="inline-block px-4 py-1.5 rounded-full"
                         style={{ background: '#FF69B4', color: '#000', fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}
                       >
-                        {t('GO PRO — €3/mo', 'UPGRADE TO PRO — €3/mo')}
+                        {t(`GO PRO — €${PRO_PRICE_OFFER_EUR}/mo`, `UPGRADE TO PRO — €${PRO_PRICE_OFFER_EUR}/mo`)}
                       </a>
                     </div>
                   )}
@@ -3244,7 +3367,14 @@ export default function App() {
                             className="relative aspect-[3/4] overflow-hidden rounded-lg border-2 border-black hover:opacity-90 active:opacity-80"
                             title={`Open try-on ${new Date(entry.createdAt).toLocaleString()}`}
                           >
-                            <Image src={entry.imageUrl} alt="Past try-on result" fill unoptimized className="object-cover" />
+                            <Image
+                              src={entry.imageUrl}
+                              alt="Past try-on result"
+                              fill
+                              unoptimized
+                              className="object-cover"
+                              onError={() => removeTryOnHistoryEntry(entry.id)}
+                            />
                           </button>
                         ))}
                       </div>
@@ -3971,9 +4101,8 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Plans Section — logged-in users only */}
-      {isLoggedIn && (
-        <section className="px-6 md:px-12 lg:px-20 py-20 border-t-4 border-black">
+      {/* Plans Section */}
+      <section id="pricing" className="px-6 md:px-12 lg:px-20 py-20 border-t-4 border-black scroll-mt-28">
           <div className="max-w-[1400px] mx-auto">
             <div className="text-center mb-14">
               <h2 className="mb-3" style={{ fontSize: 'clamp(28px, 5vw, 48px)', fontWeight: 900, letterSpacing: '-0.02em' }}>
@@ -4010,14 +4139,25 @@ export default function App() {
                     </li>
                   ))}
                 </ul>
-                <button
-                  type="button"
-                  disabled
-                  className="w-full py-4 rounded-xl border-2 border-black font-bold cursor-default"
-                  style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em', background: 'rgba(0,0,0,0.06)' }}
-                >
-                  CURRENT PLAN
-                </button>
+                {!isLoggedIn ? (
+                  <button
+                    type="button"
+                    onClick={handleSignUpCTA}
+                    className="w-full py-4 rounded-xl border-2 border-black font-bold hover:bg-black hover:text-white transition-all duration-200"
+                    style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em' }}
+                  >
+                    START FREE
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full py-4 rounded-xl border-2 border-black font-bold cursor-default"
+                    style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em', background: 'rgba(0,0,0,0.06)' }}
+                  >
+                    CURRENT PLAN
+                  </button>
+                )}
               </div>
 
               {/* Pro Plan */}
@@ -4037,11 +4177,11 @@ export default function App() {
                 </div>
                 <div className="mb-8">
                   <div className="flex items-baseline gap-3">
-                    <span style={{ fontSize: '48px', fontWeight: 900 }}>{'€'}3</span>
+                    <span style={{ fontSize: '48px', fontWeight: 900 }}>{'€'}{PRO_PRICE_OFFER_EUR}</span>
                     <span style={{ fontSize: '14px', fontWeight: 600, opacity: 0.5 }}>/month</span>
                   </div>
                   <p style={{ fontSize: '13px', fontWeight: 600, opacity: 0.55, marginTop: '4px' }}>
-                    <span style={{ textDecoration: 'line-through' }}>{'€'}6</span>
+                    <span style={{ textDecoration: 'line-through' }}>{'€'}{PRO_PRICE_MONTHLY_EUR}</span>
                     {' '}{t('for a limited time only', 'limited time offer')}
                   </p>
                 </div>
@@ -4099,12 +4239,11 @@ export default function App() {
             </div>
           </div>
         </section>
-      )}
 
       {/* Footer */}
       <footer className="px-6 md:px-12 lg:px-20 py-16 border-t-4 border-black">
         <div className="max-w-[1400px] mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-12">
+          <div className="grid md:grid-cols-3 gap-8 mb-12">
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center">
@@ -4120,23 +4259,14 @@ export default function App() {
             <div>
               <h4 className="mb-4" style={{ fontSize: '12px', fontWeight: 900, letterSpacing: '0.05em' }}>PRODUCT</h4>
               <ul className="space-y-2">
-                {['Features', 'Pricing', 'Demo', 'Download'].map(item => (
-                  <li key={item}>
-                    <a href="#" className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block" style={{ fontSize: '13px', fontWeight: 500 }}>
-                      {item}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="mb-4" style={{ fontSize: '12px', fontWeight: 900, letterSpacing: '0.05em' }}>COMPANY</h4>
-              <ul className="space-y-2">
-                {['About', 'Blog', 'Careers', 'Contact'].map(item => (
-                  <li key={item}>
-                    <a href="#" className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block" style={{ fontSize: '13px', fontWeight: 500 }}>
-                      {item}
+                {FOOTER_PRODUCT_LINKS.map((item) => (
+                  <li key={item.label}>
+                    <a
+                      href={item.href}
+                      className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block"
+                      style={{ fontSize: '13px', fontWeight: 500 }}
+                    >
+                      {item.label}
                     </a>
                   </li>
                 ))}
@@ -4146,13 +4276,27 @@ export default function App() {
             <div>
               <h4 className="mb-4" style={{ fontSize: '12px', fontWeight: 900, letterSpacing: '0.05em' }}>LEGAL</h4>
               <ul className="space-y-2">
-                {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map(item => (
-                  <li key={item}>
-                    <a href="#" className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block" style={{ fontSize: '13px', fontWeight: 500 }}>
-                      {item}
+                {FOOTER_LEGAL_LINKS.map((item) => (
+                  <li key={item.label}>
+                    <a
+                      href={item.href}
+                      className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block"
+                      style={{ fontSize: '13px', fontWeight: 500 }}
+                    >
+                      {item.label}
                     </a>
                   </li>
                 ))}
+                <li>
+                  <button
+                    type="button"
+                    onClick={openCookiePreferences}
+                    className="hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out rounded-sm inline-block text-left"
+                    style={{ fontSize: '13px', fontWeight: 500 }}
+                  >
+                    Cookie settings
+                  </button>
+                </li>
               </ul>
             </div>
           </div>
