@@ -13,7 +13,7 @@ const wardrobeSelectCols =
   'id, user_id, client_item_id, type, category, image_url, title, source_url, attribution, sort_order, version, deleted_at, created_at, updated_at';
 
 const outfitsSelectCols =
-  'id, user_id, client_outfit_id, tops_client_item_id, bottoms_client_item_id, accessories_client_item_id, snapshot, version, deleted_at, saved_at, created_at, updated_at';
+  'id, user_id, client_outfit_id, tops_client_item_id, bottoms_client_item_id, outerwear_client_item_id, footwear_client_item_id, accessories_client_item_id, snapshot, version, deleted_at, saved_at, created_at, updated_at';
 
 export async function fetchWardrobeV2(
   supabase: SupabaseClient,

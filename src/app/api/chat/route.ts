@@ -11,7 +11,7 @@ import type { WardrobeItem } from "@/types/wardrobe";
 const wardrobeItemSchema = z.object({
   code: z.string().min(1).max(120),
   type: z.string().min(1).max(120),
-  category: z.enum(["tops", "bottoms", "accessories"]),
+  category: z.enum(["tops", "bottoms", "outerwear", "footwear", "accessories"]),
   title: z.string().max(500).optional(),
 });
 
@@ -27,11 +27,24 @@ const requestSchema = z.object({
 
 type ProviderResult = { reply: string };
 
-function stylistSystemPrompt(outfitMode: boolean): string {
+type StylePrefs = { styleVibe?: string; colorPalette?: string; notes?: string };
+
+function formatStylePrefs(prefs: StylePrefs | null | undefined): string {
+  if (!prefs) return '';
+  const parts: string[] = [];
+  if (prefs.styleVibe && prefs.styleVibe !== 'no-preference') parts.push(`style vibe: ${prefs.styleVibe}`);
+  if (prefs.colorPalette && prefs.colorPalette !== 'no-preference') parts.push(`colour palette: ${prefs.colorPalette}`);
+  if (prefs.notes) parts.push(`notes: ${prefs.notes}`);
+  if (parts.length === 0) return '';
+  return `The user's style preferences: ${parts.join('; ')}. Use these to personalise every response.\n\n`;
+}
+
+function stylistSystemPrompt(outfitMode: boolean, stylePrefs: StylePrefs | null | undefined): string {
+  const prefsBlock = formatStylePrefs(stylePrefs);
   if (outfitMode) {
-    return "You are an AI fashion stylist. The user wants outfit help. Recommend only from the wardrobe items provided in the prompt; do not invent garments or item codes. Give concise, practical advice for their plans and the weather. No markdown headings.";
+    return `${prefsBlock}You are an AI fashion stylist. The user wants outfit help. Recommend only from the wardrobe items provided in the prompt; do not invent garments or item codes. Give concise, practical advice for their plans and the weather. No markdown headings.`;
   }
-  return "You are a friendly AI fashion stylist chatting with the user. They are NOT asking for a full outfit yet (greeting, small talk, or general question). Reply warmly and briefly—one or two short paragraphs max. Do NOT list specific garments, SKUs, or a full outfit. If it fits naturally, invite them to share their plans or occasion when they want concrete suggestions. No markdown headings.";
+  return `${prefsBlock}You are a friendly AI fashion stylist chatting with the user. They are NOT asking for a full outfit yet (greeting, small talk, or general question). Reply warmly and briefly—one or two short paragraphs max. Do NOT list specific garments, SKUs, or a full outfit. If it fits naturally, invite them to share their plans or occasion when they want concrete suggestions. No markdown headings.`;
 }
 
 function wardrobePromptSummary(items: WardrobeItem[]): string {
@@ -45,7 +58,7 @@ function wardrobePromptSummary(items: WardrobeItem[]): string {
     .join("\n");
 }
 
-async function callOpenAI(prompt: string, outfitMode: boolean): Promise<ProviderResult> {
+async function callOpenAI(prompt: string, outfitMode: boolean, stylePrefs: StylePrefs | null): Promise<ProviderResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
 
@@ -56,7 +69,7 @@ async function callOpenAI(prompt: string, outfitMode: boolean): Promise<Provider
     messages: [
       {
         role: "system",
-        content: stylistSystemPrompt(outfitMode),
+        content: stylistSystemPrompt(outfitMode, stylePrefs),
       },
       { role: "user", content: prompt },
     ],
@@ -77,7 +90,7 @@ function resolveAiProvider(): "openai" | "gemini" {
   return "openai";
 }
 
-async function callGemini(prompt: string, outfitMode: boolean): Promise<ProviderResult> {
+async function callGemini(prompt: string, outfitMode: boolean, stylePrefs: StylePrefs | null): Promise<ProviderResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
@@ -85,7 +98,7 @@ async function callGemini(prompt: string, outfitMode: boolean): Promise<Provider
   const modelId = process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash";
   const client = new GoogleGenerativeAI(apiKey);
   const model = client.getGenerativeModel({ model: modelId });
-  const fullPrompt = `${stylistSystemPrompt(outfitMode)}\n\n${prompt}`;
+  const fullPrompt = `${stylistSystemPrompt(outfitMode, stylePrefs)}\n\n${prompt}`;
   const result = await model.generateContent(fullPrompt);
   const reply = result.response.text().trim();
   if (!reply) throw new Error("Gemini response empty");
@@ -113,6 +126,16 @@ export async function POST(request: NextRequest) {
     const outfitMode = wantsOutfitRecommendation(message);
     const fallback = buildFallbackSuggestion(message, weather.temp, weather.condition, wardrobeItems);
 
+    let stylePrefs: StylePrefs | null = null;
+    try {
+      const { data } = await ctx.supabase
+        .from('profiles')
+        .select('style_preferences')
+        .eq('id', ctx.userId)
+        .maybeSingle();
+      if (data?.style_preferences) stylePrefs = data.style_preferences as StylePrefs;
+    } catch { /* non-breaking: fall back to no preferences */ }
+
     const prompt = [
       `User location: ${location}.`,
       `Weather: ${weather.temp}C and ${weather.condition}.`,
@@ -128,14 +151,14 @@ export async function POST(request: NextRequest) {
 
     const tryOpenAI = async () => {
       try {
-        reply = (await callOpenAI(prompt, outfitMode)).reply;
+        reply = (await callOpenAI(prompt, outfitMode, stylePrefs)).reply;
       } catch (err) {
         console.error("[chat] OpenAI failed:", err);
       }
     };
     const tryGemini = async () => {
       try {
-        reply = (await callGemini(prompt, outfitMode)).reply;
+        reply = (await callGemini(prompt, outfitMode, stylePrefs)).reply;
       } catch (err) {
         console.error("[chat] Gemini failed:", err);
       }

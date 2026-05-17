@@ -3,6 +3,8 @@ import type { WardrobeCategory, WardrobeItem } from '@/types/wardrobe';
 export type OutfitSuggestion = {
   tops: string[];
   bottoms: string[];
+  outerwear: string[];
+  footwear: string[];
   accessories: string[];
   reason: string;
 };
@@ -78,6 +80,8 @@ export function buildFallbackSuggestion(
     return {
       tops: [],
       bottoms: [],
+      outerwear: [],
+      footwear: [],
       accessories: [],
       reason: "I do not see wardrobe items in your closet yet, so I cannot pick owned pieces. Add a few items and I will build suggestions from them.",
     };
@@ -85,6 +89,8 @@ export function buildFallbackSuggestion(
 
   const tops = pickByCategory(usableItems, 'tops', 3, context);
   const bottoms = pickByCategory(usableItems, 'bottoms', 2, context);
+  const outerwear = pickByCategory(usableItems, 'outerwear', 1, context);
+  const footwear = pickByCategory(usableItems, 'footwear', 2, context);
   const accessories = pickByCategory(usableItems, 'accessories', 2, context);
   const firstTop = tops[0];
   const firstBottom = bottoms[0];
@@ -95,6 +101,8 @@ export function buildFallbackSuggestion(
     return {
       tops: tops.map((item) => item.code),
       bottoms: bottoms.map((item) => item.code),
+      outerwear: outerwear.map((item) => item.code),
+      footwear: footwear.map((item) => item.code),
       accessories: accessories.map((item) => item.code),
       reason: `For work-to-date transition, start with ${primaryPiece ? label(primaryPiece) : 'one reliable closet piece'} and keep the outfit polished but flexible. ${isRaining ? "Prioritize your most weather-ready layer." : "Keep accessories minimal for flexibility."}`,
     };
@@ -104,6 +112,8 @@ export function buildFallbackSuggestion(
     return {
       tops: tops.map((item) => item.code),
       bottoms: bottoms.map((item) => item.code),
+      outerwear: outerwear.map((item) => item.code),
+      footwear: footwear.map((item) => item.code),
       accessories: accessories.map((item) => item.code),
       reason: `Professional and clean styling for work using pieces already in your wardrobe. ${isCold ? "Choose your warmest available layer." : "Use lighter pieces for comfort."}`,
     };
@@ -113,6 +123,8 @@ export function buildFallbackSuggestion(
     return {
       tops: tops.map((item) => item.code),
       bottoms: bottoms.map((item) => item.code),
+      outerwear: outerwear.map((item) => item.code),
+      footwear: footwear.map((item) => item.code),
       accessories: accessories.map((item) => item.code),
       reason: `Date-night ready styling with your own closet pieces. ${isCold ? "Add your warmest soft layer." : "A lighter top keeps the look relaxed."}`,
     };
@@ -121,6 +133,8 @@ export function buildFallbackSuggestion(
   return {
     tops: tops.map((item) => item.code),
     bottoms: bottoms.map((item) => item.code),
+    outerwear: outerwear.map((item) => item.code),
+    footwear: footwear.map((item) => item.code),
     accessories: accessories.map((item) => item.code),
     reason: "Casual and comfortable look built from pieces currently in your wardrobe.",
   };

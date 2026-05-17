@@ -5,7 +5,7 @@
 
 import type { WardrobeItem } from '@/types/wardrobe';
 
-export type WardrobeSeedCategory = 'tops' | 'bottoms' | 'accessories';
+export type WardrobeSeedCategory = 'tops' | 'bottoms' | 'outerwear' | 'footwear' | 'accessories';
 
 export interface WardrobeSeedItem {
   code: string;
