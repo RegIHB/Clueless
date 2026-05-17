@@ -27,10 +27,14 @@ export type SavedOutfitRowV2 = {
   client_outfit_id: string;
   tops_client_item_id: string | null;
   bottoms_client_item_id: string | null;
+  outerwear_client_item_id: string | null;
+  footwear_client_item_id: string | null;
   accessories_client_item_id: string | null;
   snapshot: {
     tops?: WardrobeItem;
     bottoms?: WardrobeItem;
+    outerwear?: WardrobeItem;
+    footwear?: WardrobeItem;
     accessories?: WardrobeItem;
   };
   version: number;
@@ -57,6 +61,8 @@ export function rowToSavedOutfit(row: SavedOutfitRowV2): SavedOutfit {
     id: row.id,
     tops: row.snapshot.tops,
     bottoms: row.snapshot.bottoms,
+    outerwear: row.snapshot.outerwear,
+    footwear: row.snapshot.footwear,
     accessories: row.snapshot.accessories,
     savedAt: new Date(row.saved_at),
   };

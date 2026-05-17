@@ -9,7 +9,7 @@ import { readFromV2 } from '@/lib/supabase/sync-feature-flags';
 const wardrobeItemSchema = z.object({
   code: z.string().min(1).max(120),
   type: z.string().min(1).max(120),
-  category: z.enum(['tops', 'bottoms', 'accessories']),
+  category: z.enum(['tops', 'bottoms', 'outerwear', 'footwear', 'accessories']),
   imageUrl: z.string().max(8000).optional(),
   title: z.string().max(500).optional(),
   sourceUrl: z.string().max(8000).optional(),
@@ -20,6 +20,8 @@ const upsertOutfitSchema = z.object({
   clientOutfitId: z.string().min(1).max(120).optional(),
   tops: wardrobeItemSchema.optional(),
   bottoms: wardrobeItemSchema.optional(),
+  outerwear: wardrobeItemSchema.optional(),
+  footwear: wardrobeItemSchema.optional(),
   accessories: wardrobeItemSchema.optional(),
   savedAt: z.string().datetime().optional(),
   clientMutationId: z.string().min(1).max(120).optional(),
@@ -66,7 +68,7 @@ export async function POST(request: Request) {
     );
   }
   const payload = parsed.data;
-  if (!payload.tops && !payload.bottoms && !payload.accessories) {
+  if (!payload.tops && !payload.bottoms && !payload.outerwear && !payload.footwear && !payload.accessories) {
     return NextResponse.json(
       { error: { code: 'validation', message: 'At least one item is required' } },
       { status: 400 }
@@ -81,6 +83,8 @@ export async function POST(request: Request) {
     clientOutfitId,
     tops: payload.tops,
     bottoms: payload.bottoms,
+    outerwear: payload.outerwear,
+    footwear: payload.footwear,
     accessories: payload.accessories,
     savedAt: payload.savedAt ? new Date(payload.savedAt) : new Date(),
     mutationId: payload.clientMutationId,
