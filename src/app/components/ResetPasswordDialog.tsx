@@ -100,14 +100,14 @@ export function ResetPasswordDialog({
       }}
     >
       <DialogContent
-        className="border-[3px] border-black shadow-[8px_8px_0_#000] sm:max-w-md"
-        style={{ background: '#FFF5FA' }}
+        className="border-[3px] border-[var(--clue-border)] shadow-[var(--clue-shadow-lg)] sm:max-w-md"
+        style={{ background: 'var(--clue-surface-accent)' }}
       >
         <DialogHeader>
           <DialogTitle className="text-xl font-black tracking-tight uppercase">
             Choose a new password
           </DialogTitle>
-          <DialogDescription className="text-sm font-medium text-black/70">
+          <DialogDescription className="text-sm font-medium text-[var(--clue-text-muted)]">
             You opened the reset link from your email. Set a new password for your account.
           </DialogDescription>
         </DialogHeader>
@@ -126,11 +126,11 @@ export function ResetPasswordDialog({
                 value={password}
                 onChange={(ev) => setPassword(ev.target.value)}
                 placeholder="••••••••"
-                className="border-2 border-black bg-white pr-11"
+                className="border-2 border-[var(--clue-border)] bg-[var(--clue-surface)] pr-11"
               />
               <button
                 type="button"
-                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-black/60 transition-colors hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+                className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-[var(--clue-text-subtle)] transition-colors hover:text-[var(--clue-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--clue-focus)] focus-visible:ring-offset-2"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={
                   showPassword ? 'Hide password fields' : 'Show password fields'
@@ -157,7 +157,7 @@ export function ResetPasswordDialog({
               value={confirm}
               onChange={(ev) => setConfirm(ev.target.value)}
               placeholder="••••••••"
-              className="border-2 border-black bg-white"
+              className="border-2 border-[var(--clue-border)] bg-[var(--clue-surface)]"
             />
           </div>
 
@@ -170,7 +170,7 @@ export function ResetPasswordDialog({
           <Button
             type="submit"
             disabled={busy}
-            className="h-11 border-2 border-black bg-black text-white hover:bg-black/90 font-bold tracking-wide"
+            className="h-11 border-2 border-[var(--clue-border)] bg-[var(--clue-inverse)] text-[var(--clue-inverse-text)] hover:opacity-90 font-bold tracking-wide"
           >
             {busy ? 'Please wait…' : 'Update password'}
           </Button>

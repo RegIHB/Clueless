@@ -406,14 +406,14 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
         className={`w-full rounded-3xl overflow-hidden flex flex-col my-auto max-h-[min(90vh,100dvh-1rem)] ${modalWide ? 'max-w-[min(920px,calc(100vw-2rem))]' : 'max-w-[600px]'}`}
         style={{
-          background: '#fff',
-          border: '4px solid #000',
+          background: 'var(--clue-surface)',
+          border: '4px solid var(--clue-border)',
           boxShadow: '0 24px 64px rgba(0, 0, 0, 0.5)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
-          className="p-4 sm:p-6 border-b-4 border-black flex items-center justify-between gap-3 shrink-0 min-w-0"
+          className="p-4 sm:p-6 border-b-4 border-[var(--clue-border)] flex items-center justify-between gap-3 shrink-0 min-w-0"
           style={{
             background: 'linear-gradient(135deg, #FFE5C8 0%, #FFD4B8 100%)'
           }}
@@ -425,7 +425,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
             type="button"
             onClick={onClose}
             className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-transform duration-200 ease-out hover:scale-110 active:scale-95"
-            style={{ background: '#000', color: '#fff' }}
+            style={{ background: 'var(--clue-inverse)', color: 'var(--clue-inverse-text)' }}
             aria-label="Close"
           >
             <X className="w-5 h-5" strokeWidth={2.5} />
@@ -467,8 +467,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#FFE5F1',
-                  border: '3px solid #000',
-                  boxShadow: '4px 4px 0 #000'
+                  border: '3px solid var(--clue-border)',
+                  boxShadow: 'var(--clue-shadow-sm)'
                 }}
               >
                 <Camera className="w-8 h-8 mb-3" strokeWidth={2} />
@@ -486,9 +486,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 disabled={fileLoading || removingBg}
                 className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
-                  background: '#FFE5C8',
-                  border: '3px solid #000',
-                  boxShadow: '4px 4px 0 #000'
+                  background: 'var(--clue-surface-warm)',
+                  border: '3px solid var(--clue-border)',
+                  boxShadow: 'var(--clue-shadow-sm)'
                 }}
               >
                 <Upload className="w-8 h-8 mb-3" strokeWidth={2} />
@@ -533,8 +533,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#EDE9FE',
-                  border: '3px solid #000',
-                  boxShadow: '4px 4px 0 #000',
+                  border: '3px solid var(--clue-border)',
+                  boxShadow: 'var(--clue-shadow-sm)',
                 }}
               >
                 <ScanBarcode className="w-8 h-8 mb-3" strokeWidth={2} />
@@ -558,8 +558,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 className="w-full p-6 rounded-2xl text-left hover:scale-[1.02] active:scale-[0.99] transition-transform duration-200 ease-out"
                 style={{
                   background: '#E0F2FE',
-                  border: '3px solid #000',
-                  boxShadow: '4px 4px 0 #000'
+                  border: '3px solid var(--clue-border)',
+                  boxShadow: 'var(--clue-shadow-sm)'
                 }}
               >
                 <Search className="w-8 h-8 mb-3" strokeWidth={2} />
@@ -605,10 +605,10 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   placeholder="e.g. navy wool peacoat, white cotton tee, running sneakers"
                   className="w-full px-4 py-3 rounded-xl outline-none transition-[box-shadow,border-color] duration-200 ease-out"
                   style={{
-                    border: '3px solid #000',
+                    border: '3px solid var(--clue-border)',
                     fontSize: '15px',
                     fontWeight: 500,
-                    boxShadow: '4px 4px 0 #000'
+                    boxShadow: 'var(--clue-shadow-sm)'
                   }}
                   autoComplete="off"
                 />
@@ -637,7 +637,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                         <div
                           key={i}
                           className="rounded-2xl overflow-hidden"
-                          style={{ border: '3px solid #000', boxShadow: '4px 4px 0 #000', background: '#fafafa' }}
+                          style={{ border: '3px solid var(--clue-border)', boxShadow: 'var(--clue-shadow-sm)', background: 'var(--clue-surface-muted)' }}
                         >
                           <Skeleton className="aspect-square w-full rounded-none" />
                           <div className="p-2 space-y-1.5">
@@ -676,9 +676,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                           onClick={() => setPickedProduct(p)}
                           className="rounded-2xl text-left overflow-hidden transition-[transform,box-shadow] duration-200 ease-out hover:scale-[1.02] active:scale-[0.99]"
                           style={{
-                            border: selected ? '3px solid #0284c7' : '3px solid #000',
-                            boxShadow: selected ? '4px 4px 0 #0284c7' : '4px 4px 0 #000',
-                            background: '#fafafa'
+                            border: selected ? '3px solid #0284c7' : '3px solid var(--clue-border)',
+                            boxShadow: selected ? '4px 4px 0 #0284c7' : 'var(--clue-shadow-sm)',
+                            background: 'var(--clue-surface-muted)'
                           }}
                         >
                           <div className="relative aspect-square w-full bg-neutral-100">
@@ -722,8 +722,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   }}
                   className="flex-1 px-6 py-3 rounded-full"
                   style={{
-                    background: '#f5f5f5',
-                    border: '2px solid #000',
+                    background: 'var(--clue-surface-muted)',
+                    border: '2px solid var(--clue-border)',
                     fontSize: '14px',
                     fontWeight: 700,
                     letterSpacing: '0.05em'
@@ -735,9 +735,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   type="button"
                   onClick={goToDetailsFromPicker}
                   disabled={!pickedProduct}
-                  className="flex-1 px-6 py-3 rounded-full text-white disabled:opacity-45"
+                  className="flex-1 px-6 py-3 rounded-full text-[var(--clue-inverse-text)] disabled:opacity-45"
                   style={{
-                    background: '#000',
+                    background: 'var(--clue-inverse)',
                     fontSize: '14px',
                     fontWeight: 700,
                     letterSpacing: '0.05em'
@@ -792,10 +792,10 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                     placeholder="8–14 digit UPC / EAN"
                     className="flex-1 px-4 py-3 rounded-xl outline-none"
                     style={{
-                      border: '3px solid #000',
+                      border: '3px solid var(--clue-border)',
                       fontSize: '15px',
                       fontWeight: 500,
-                      boxShadow: '4px 4px 0 #000',
+                      boxShadow: 'var(--clue-shadow-sm)',
                     }}
                     autoComplete="off"
                   />
@@ -803,9 +803,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                     type="button"
                     disabled={barcodeLoading || barcodeInput.replace(/\D/g, '').length < 8}
                     onClick={() => void lookupBarcode(barcodeInput)}
-                    className="px-5 py-3 rounded-xl text-white disabled:opacity-45 shrink-0"
+                    className="px-5 py-3 rounded-xl text-[var(--clue-inverse-text)] disabled:opacity-45 shrink-0"
                     style={{
-                      background: '#000',
+                      background: 'var(--clue-inverse)',
                       fontSize: '13px',
                       fontWeight: 700,
                       letterSpacing: '0.05em',
@@ -851,9 +851,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                         onClick={() => setPickedProduct(p)}
                         className="rounded-2xl text-left overflow-hidden transition-[transform,box-shadow] duration-200 ease-out hover:scale-[1.02] active:scale-[0.99]"
                         style={{
-                          border: selected ? '3px solid #0284c7' : '3px solid #000',
-                          boxShadow: selected ? '4px 4px 0 #0284c7' : '4px 4px 0 #000',
-                          background: '#fafafa',
+                          border: selected ? '3px solid #0284c7' : '3px solid var(--clue-border)',
+                          boxShadow: selected ? '4px 4px 0 #0284c7' : 'var(--clue-shadow-sm)',
+                          background: 'var(--clue-surface-muted)',
                         }}
                       >
                         <div className="relative aspect-square w-full bg-neutral-100">
@@ -899,8 +899,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   }}
                   className="flex-1 px-6 py-3 rounded-full"
                   style={{
-                    background: '#f5f5f5',
-                    border: '2px solid #000',
+                    background: 'var(--clue-surface-muted)',
+                    border: '2px solid var(--clue-border)',
                     fontSize: '14px',
                     fontWeight: 700,
                     letterSpacing: '0.05em',
@@ -913,9 +913,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                     type="button"
                     onClick={goToDetailsFromBarcode}
                     disabled={!pickedProduct}
-                    className="flex-1 px-6 py-3 rounded-full text-white disabled:opacity-45"
+                    className="flex-1 px-6 py-3 rounded-full text-[var(--clue-inverse-text)] disabled:opacity-45"
                     style={{
-                      background: '#000',
+                      background: 'var(--clue-inverse)',
                       fontSize: '14px',
                       fontWeight: 700,
                       letterSpacing: '0.05em',
@@ -942,7 +942,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
               <motion.div className="flex gap-4 items-start">
                 <div
                   className="relative w-28 h-28 rounded-xl overflow-hidden shrink-0"
-                  style={{ border: '3px solid #000', boxShadow: '4px 4px 0 #000' }}
+                  style={{ border: '3px solid var(--clue-border)', boxShadow: 'var(--clue-shadow-sm)' }}
                 >
                   <Image
                     src={pickedLocalImage.imageUrl}
@@ -983,7 +983,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                         <div
                           key={i}
                           className="rounded-2xl overflow-hidden"
-                          style={{ border: '3px solid #000', boxShadow: '4px 4px 0 #000', background: '#fafafa' }}
+                          style={{ border: '3px solid var(--clue-border)', boxShadow: 'var(--clue-shadow-sm)', background: 'var(--clue-surface-muted)' }}
                         >
                           <Skeleton className="aspect-square w-full rounded-none" />
                           <div className="p-2 space-y-1.5">
@@ -1016,9 +1016,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                           onClick={() => setPickedProduct(p)}
                           className="rounded-2xl text-left overflow-hidden transition-[transform,box-shadow] duration-200 ease-out hover:scale-[1.02] active:scale-[0.99]"
                           style={{
-                            border: selected ? '3px solid #0284c7' : '3px solid #000',
-                            boxShadow: selected ? '4px 4px 0 #0284c7' : '4px 4px 0 #000',
-                            background: '#fafafa',
+                            border: selected ? '3px solid #0284c7' : '3px solid var(--clue-border)',
+                            boxShadow: selected ? '4px 4px 0 #0284c7' : 'var(--clue-shadow-sm)',
+                            background: 'var(--clue-surface-muted)',
                           }}
                         >
                           <motion.div className="relative aspect-square w-full bg-neutral-100">
@@ -1063,8 +1063,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   }}
                   className="flex-1 px-6 py-3 rounded-full"
                   style={{
-                    background: '#f5f5f5',
-                    border: '2px solid #000',
+                    background: 'var(--clue-surface-muted)',
+                    border: '2px solid var(--clue-border)',
                     fontSize: '14px',
                     fontWeight: 700,
                     letterSpacing: '0.05em',
@@ -1077,8 +1077,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   onClick={() => goToDetailsFromScan(false)}
                   className="flex-1 px-6 py-3 rounded-full"
                   style={{
-                    background: '#fff',
-                    border: '2px solid #000',
+                    background: 'var(--clue-surface)',
+                    border: '2px solid var(--clue-border)',
                     fontSize: '14px',
                     fontWeight: 700,
                     letterSpacing: '0.05em',
@@ -1090,9 +1090,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   type="button"
                   onClick={() => goToDetailsFromScan(true)}
                   disabled={!pickedProduct}
-                  className="flex-1 px-6 py-3 rounded-full text-white disabled:opacity-45"
+                  className="flex-1 px-6 py-3 rounded-full text-[var(--clue-inverse-text)] disabled:opacity-45"
                   style={{
-                    background: '#000',
+                    background: 'var(--clue-inverse)',
                     fontSize: '14px',
                     fontWeight: 700,
                     letterSpacing: '0.05em',
@@ -1114,7 +1114,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 <div className="flex gap-4 items-start">
                   <div
                     className="relative w-24 h-24 rounded-xl overflow-hidden shrink-0"
-                    style={{ border: '2px solid #000' }}
+                    style={{ border: '2px solid var(--clue-border)' }}
                   >
                     <Image
                       src={pickedProduct?.thumbnailUrl || pickedProduct?.imageUrl || pickedLocalImage?.imageUrl || ''}
@@ -1150,9 +1150,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                       }}
                       className="flex-1 px-4 py-3 rounded-full transition-colors duration-200 ease-out"
                       style={{
-                        background: selectedCategory === cat ? '#000' : '#f5f5f5',
-                        color: selectedCategory === cat ? '#fff' : '#000',
-                        border: '2px solid #000',
+                        background: selectedCategory === cat ? 'var(--clue-inverse)' : 'var(--clue-surface-muted)',
+                        color: selectedCategory === cat ? 'var(--clue-inverse-text)' : 'var(--clue-text)',
+                        border: '2px solid var(--clue-border)',
                         fontSize: '12px',
                         fontWeight: 700,
                         letterSpacing: '0.05em',
@@ -1205,8 +1205,8 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                   }}
                   className="flex-1 px-6 py-3 rounded-full"
                   style={{
-                    background: '#f5f5f5',
-                    border: '2px solid #000',
+                    background: 'var(--clue-surface-muted)',
+                    border: '2px solid var(--clue-border)',
                     fontSize: '14px',
                     fontWeight: 700,
                     letterSpacing: '0.05em'
@@ -1217,9 +1217,9 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 <button
                   onClick={handleUpload}
                   disabled={!selectedType}
-                  className="flex-1 px-6 py-3 rounded-full text-white disabled:opacity-50"
+                  className="flex-1 px-6 py-3 rounded-full text-[var(--clue-inverse-text)] disabled:opacity-50"
                   style={{
-                    background: '#000',
+                    background: 'var(--clue-inverse)',
                     fontSize: '14px',
                     fontWeight: 700,
                     letterSpacing: '0.05em'
@@ -1244,7 +1244,7 @@ export function UploadFlow({ onClose, onUpload }: UploadFlowProps) {
                 className="w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center"
                 style={{
                   background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  color: '#fff'
+                  color: 'var(--clue-inverse-text)'
                 }}
               >
                 <Check className="w-10 h-10" strokeWidth={3} />

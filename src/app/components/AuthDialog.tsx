@@ -197,14 +197,14 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
       }}
     >
       <DialogContent
-        className="border-[3px] border-black shadow-[8px_8px_0_#000] sm:max-w-md"
-        style={{ background: '#FFF5FA' }}
+        className="border-[3px] border-[var(--clue-border)] shadow-[var(--clue-shadow-lg)] sm:max-w-md"
+        style={{ background: 'var(--clue-surface-accent)' }}
       >
         <DialogHeader>
           <DialogTitle className="text-xl font-black tracking-tight uppercase">
             {mode === 'forgot' ? 'Reset password' : mode === 'signin' ? 'Sign in' : 'Create account'}
           </DialogTitle>
-          <DialogDescription className="text-sm font-medium text-black/70">
+          <DialogDescription className="text-sm font-medium text-[var(--clue-text-muted)]">
             {mode === 'forgot'
               ? 'Enter your email and we will send you a link to choose a new password.'
               : mode === 'signin'
@@ -233,7 +233,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
                 value={displayName}
                 onChange={(ev) => setDisplayName(ev.target.value)}
                 placeholder="Alex"
-                className="border-2 border-black bg-white"
+                className="border-2 border-[var(--clue-border)] bg-[var(--clue-surface)]"
               />
             </div>
           )}
@@ -252,7 +252,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
               }}
               placeholder="you@example.com"
               aria-invalid={formError ? true : undefined}
-              className="border-2 border-black bg-white"
+              className="border-2 border-[var(--clue-border)] bg-[var(--clue-surface)]"
             />
           </div>
           {mode !== 'forgot' && (
@@ -273,11 +273,11 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
                   placeholder="••••••••"
                   minLength={mode === 'signup' ? 6 : undefined}
                   aria-invalid={formError ? true : undefined}
-                  className="border-2 border-black bg-white pr-11"
+                  className="border-2 border-[var(--clue-border)] bg-[var(--clue-surface)] pr-11"
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-black/60 transition-colors hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md text-[var(--clue-text-subtle)] transition-colors hover:text-[var(--clue-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--clue-focus)] focus-visible:ring-offset-2"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                   aria-pressed={showPassword}
@@ -314,7 +314,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
                 animate={{ opacity: 1, y: 0, height: 'auto' }}
                 exit={{ opacity: 0, y: -4, height: 0 }}
                 transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                className="text-sm font-medium text-black/80 overflow-hidden"
+                className="text-sm font-medium text-[var(--clue-text-muted)] overflow-hidden"
                 role="status"
                 aria-live="polite"
               >
@@ -327,7 +327,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
             type="submit"
             loading={busy}
             disabled={busy}
-            className="h-11 border-2 border-black bg-black text-white hover:bg-black/90 font-bold tracking-wide"
+            className="h-11 border-2 border-[var(--clue-border)] bg-[var(--clue-inverse)] text-[var(--clue-inverse-text)] hover:opacity-90 font-bold tracking-wide"
           >
             {busy
               ? 'Please wait…'
@@ -347,18 +347,18 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
               setMode('forgot');
             }}
             disabled={busy}
-            className="text-xs font-bold text-black/70 underline underline-offset-2 hover:text-black disabled:opacity-50"
+            className="text-xs font-bold text-[var(--clue-text-muted)] underline underline-offset-2 hover:text-[var(--clue-text)] disabled:opacity-50"
           >
             Forgot password?
           </button>
         )}
 
-        <p className="text-center text-sm font-medium text-black/70">
+        <p className="text-center text-sm font-medium text-[var(--clue-text-muted)]">
           {mode === 'forgot' ? (
             <>
               <button
                 type="button"
-                className="font-bold text-black underline underline-offset-2"
+                className="font-bold text-[var(--clue-text)] underline underline-offset-2"
                 onClick={() => {
                   resetMessages();
                   setMode('signin');
@@ -372,7 +372,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
               No account?{' '}
               <button
                 type="button"
-                className="font-bold text-black underline underline-offset-2"
+                className="font-bold text-[var(--clue-text)] underline underline-offset-2"
                 onClick={() => {
                   resetMessages();
                   setMode('signup');
@@ -386,7 +386,7 @@ export function AuthDialog({ open, onOpenChange, initialMode = 'signin', onSigne
               Already have an account?{' '}
               <button
                 type="button"
-                className="font-bold text-black underline underline-offset-2"
+                className="font-bold text-[var(--clue-text)] underline underline-offset-2"
                 onClick={() => {
                   resetMessages();
                   setMode('signin');

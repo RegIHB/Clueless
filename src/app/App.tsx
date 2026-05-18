@@ -38,6 +38,7 @@ import type { SavedOutfit, WardrobeCategory, WardrobeItem } from '@/types/wardro
 import type { CreateTryOnJobResponse, TryOnJobSnapshot, VtoErrorCode, VtoStage } from '@/lib/vto/contracts';
 import { getVtoCopy } from '@/lib/vto/copy';
 import { useCookieConsent } from './components/CookieConsentProvider';
+import { ThemeToggle } from './components/ThemeToggle';
 
 const SUPABASE_ON = isSupabaseConfigured();
 const PRO_PRICE_MONTHLY_EUR = 12;
@@ -1787,13 +1788,13 @@ export default function App() {
   }, [wardrobeSearchQuery]);
 
   return (
-    <div className="min-h-screen relative overflow-x-hidden" style={{
-      background: 'linear-gradient(180deg, #FFB3D9 0%, #FFC9E5 50%, #FFE5F1 100%)'
+    <div className="clueless-app min-h-screen relative overflow-x-hidden" style={{
+      background: 'var(--clue-page-bg)',
     }}>
       {/* Subtle dot pattern */}
       <div className="fixed inset-0 pointer-events-none opacity-[0.15]" style={{
-        backgroundImage: 'radial-gradient(circle, #000 1px, transparent 1px)',
-        backgroundSize: '24px 24px'
+        backgroundImage: 'radial-gradient(circle, var(--clue-dot) 1px, transparent 1px)',
+        backgroundSize: '24px 24px',
       }} />
       {/* Header */}
       <motion.header
@@ -1802,21 +1803,23 @@ export default function App() {
         transition={{ duration: 0.6 }}
         className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3"
         style={{
-          background: 'rgba(255, 255, 255, 0.8)',
+          background: 'var(--clue-header-bg)',
           backdropFilter: 'blur(12px)',
-          borderBottom: '2px solid rgba(0, 0, 0, 0.08)'
+          borderBottom: '2px solid var(--clue-border-soft)',
+          color: 'var(--clue-text)',
         }}
       >
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
           <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{
-            background: '#000000'
+            background: 'var(--clue-inverse)',
           }}>
-            <Shirt className="w-4 h-4 text-white" strokeWidth={2} />
+            <Shirt className="w-4 h-4 text-[var(--clue-inverse-text)]" strokeWidth={2} />
           </div>
           <span className="tracking-[0.05em] uppercase truncate" style={{ fontSize: '13px', fontWeight: 700 }}>Clueless</span>
         </div>
 
-        <div className="flex items-center gap-3 sm:gap-6 min-w-0 flex-1 justify-end">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 justify-end">
+          <ThemeToggle />
           {isLoggedIn && (
             <nav
               className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0 min-w-0 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
@@ -1850,7 +1853,10 @@ export default function App() {
               >
                 SAVED OUTFITS
                 {savedOutfits.length > 0 && (
-                  <span className="w-5 h-5 rounded-full bg-black text-white flex items-center justify-center" style={{ fontSize: '9px', fontWeight: 700 }}>
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center"
+                    style={{ background: 'var(--clue-inverse)', color: 'var(--clue-inverse-text)', fontSize: '9px', fontWeight: 700 }}
+                  >
                     {savedOutfits.length}
                   </span>
                 )}
@@ -1867,7 +1873,7 @@ export default function App() {
                   className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full hover:opacity-80 active:opacity-70 transition-all duration-200 ease-out shrink-0"
                   style={{
                     background: 'linear-gradient(135deg, #FFE5C8 0%, #FFD4B8 100%)',
-                    border: '2px solid #000'
+                    border: '2px solid var(--clue-border)'
                   }}
                 >
                   <Camera className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -1877,8 +1883,8 @@ export default function App() {
               <div
                 className="flex items-center gap-1 sm:gap-2 pl-2 pr-1 sm:pr-2 py-1 rounded-full min-w-0 max-w-full relative z-[60] pointer-events-auto"
                 style={{
-                  background: '#FFE5F1',
-                  border: '2px solid #000',
+                  background: 'var(--clue-surface-accent)',
+                  border: '2px solid var(--clue-border)',
                 }}
                 title={`Signed in as ${userName}`}
               >
@@ -1892,7 +1898,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => void handleLogout()}
-                  className="flex items-center justify-center min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 rounded-full hover:bg-black/8 active:bg-black/12 transition-colors shrink-0 -mr-0.5"
+                  className="flex items-center justify-center min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 rounded-full hover:bg-[var(--clue-hover-overlay)] active:opacity-80 transition-colors shrink-0 -mr-0.5"
                   aria-label={`Log out ${userName}`}
                 >
                   <LogOut className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} aria-hidden />
@@ -1903,12 +1909,12 @@ export default function App() {
             <button
               type="button"
               onClick={handleLogin}
-              className="px-6 py-2.5 sm:px-7 sm:py-3 text-white hover:opacity-90 active:opacity-80 transition-all duration-200 ease-out rounded-full shrink-0"
+              className="px-6 py-2.5 sm:px-7 sm:py-3 text-[var(--clue-inverse-text)] hover:opacity-90 active:opacity-80 transition-all duration-200 ease-out rounded-full shrink-0"
               style={{
                 fontSize: '11px',
                 fontWeight: 700,
                 letterSpacing: '0.12em',
-                background: '#000000',
+                background: 'var(--clue-inverse)',
                 boxShadow: '0 6px 20px rgba(0, 0, 0, 0.18)'
               }}
             >
@@ -1922,7 +1928,7 @@ export default function App() {
         <div className="fixed top-[74px] right-6 z-40">
           <div
             className="rounded-full px-3 py-1.5"
-            style={{ background: '#FFF', border: '2px solid #000' }}
+            style={{ background: 'var(--clue-surface)', border: '2px solid var(--clue-border)' }}
             title={syncQueue[0]?.lastError ?? undefined}
           >
             <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em' }}>
@@ -1956,9 +1962,9 @@ export default function App() {
               className="flex justify-center mb-8"
             >
               <div className="inline-flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 sm:px-6 py-3 rounded-full max-w-[calc(100vw-2rem)]" style={{
-                background: 'rgba(255, 255, 255, 0.8)',
-                border: '2px solid #000',
-                boxShadow: '4px 4px 0 #000'
+                background: 'var(--clue-glass)',
+                border: '2px solid var(--clue-border)',
+                boxShadow: 'var(--clue-shadow-sm)'
               }}>
                 <div className="flex items-center gap-2 min-w-0">
                   <MapPin className="w-4 h-4 shrink-0" strokeWidth={2.5} />
@@ -1968,7 +1974,7 @@ export default function App() {
                         value={locationDraft}
                         onChange={(e) => setLocationDraft(e.target.value)}
                         className="min-w-[7rem] rounded-md px-2 py-0.5"
-                        style={{ fontSize: '11px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                        style={{ fontSize: '11px', fontWeight: 700, border: '1px solid var(--clue-border)', background: 'var(--clue-surface)' }}
                         placeholder="City"
                         aria-label="City"
                       />
@@ -1982,7 +1988,7 @@ export default function App() {
                           setIsEditingLocation(false);
                         }}
                         className="px-2 py-0.5 rounded-full"
-                        style={{ fontSize: '9px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                        style={{ fontSize: '9px', fontWeight: 700, border: '1px solid var(--clue-border)', background: 'var(--clue-surface)' }}
                         aria-label="Save city"
                       >
                         SAVE
@@ -1994,7 +2000,7 @@ export default function App() {
                           setIsEditingLocation(false);
                         }}
                         className="px-2 py-0.5 rounded-full"
-                        style={{ fontSize: '9px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                        style={{ fontSize: '9px', fontWeight: 700, border: '1px solid var(--clue-border)', background: 'var(--clue-surface)' }}
                         aria-label="Cancel city edit"
                       >
                         CANCEL
@@ -2010,7 +2016,7 @@ export default function App() {
                           setIsEditingLocation(true);
                         }}
                         className="px-2 py-0.5 rounded-full"
-                        style={{ fontSize: '9px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                        style={{ fontSize: '9px', fontWeight: 700, border: '1px solid var(--clue-border)', background: 'var(--clue-surface)' }}
                         aria-label="Edit city"
                       >
                         EDIT
@@ -2020,7 +2026,7 @@ export default function App() {
                           type="button"
                           onClick={() => setHasManualLocation(false)}
                           className="px-2 py-0.5 rounded-full"
-                          style={{ fontSize: '9px', fontWeight: 700, border: '1px solid #000', background: '#FFF' }}
+                          style={{ fontSize: '9px', fontWeight: 700, border: '1px solid var(--clue-border)', background: 'var(--clue-surface)' }}
                           aria-label="Use auto detected city"
                         >
                           AUTO
@@ -2029,7 +2035,7 @@ export default function App() {
                     </>
                   )}
                 </div>
-                <div className="hidden sm:block w-px h-4 bg-black opacity-20 shrink-0" aria-hidden />
+                <div className="hidden sm:block w-px h-4 bg-[var(--clue-inverse)] opacity-20 shrink-0" aria-hidden />
                 <div className="flex items-center gap-2 flex-wrap justify-center min-w-0">
                   <Cloud className="w-4 h-4 shrink-0" strokeWidth={2.5} />
                   <span style={{ fontSize: '12px', fontWeight: 700 }}>{weather.temp}°C</span>
@@ -2049,9 +2055,9 @@ export default function App() {
               <div
                 className="rounded-3xl p-6 md:p-8"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.74)',
-                  border: '3px solid #000',
-                  boxShadow: '10px 10px 0 #000',
+                  background: 'var(--clue-surface-muted)',
+                  border: '3px solid var(--clue-border)',
+                  boxShadow: 'var(--clue-shadow-xl)',
                 }}
               >
                 <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr] items-start">
@@ -2087,7 +2093,7 @@ export default function App() {
                         <div
                           key={kpi.label}
                           className="rounded-xl px-3 py-2"
-                          style={{ background: '#FFE5C8', border: '2px solid #000' }}
+                          style={{ background: 'var(--clue-surface-warm)', border: '2px solid var(--clue-border)' }}
                         >
                           <div style={{ fontSize: '20px', fontWeight: 900, lineHeight: 1 }}>{kpi.value}</div>
                           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.7 }}>{kpi.label}</div>
@@ -2100,7 +2106,7 @@ export default function App() {
 
                     <div
                       className="my-5 rounded-2xl p-4"
-                      style={{ background: '#FFF', border: '2px solid #000' }}
+                      style={{ background: 'var(--clue-surface)', border: '2px solid var(--clue-border)' }}
                     >
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -2116,7 +2122,7 @@ export default function App() {
                           onClick={() => void handleSaveStylePreferences()}
                           disabled={isSavingPreferences || !stylePreferencesDirty}
                           className="rounded-full px-4 py-2 disabled:opacity-45"
-                          style={{ background: '#000', color: '#fff', fontSize: '10px', fontWeight: 800, letterSpacing: '0.08em' }}
+                          style={{ background: 'var(--clue-inverse)', color: 'var(--clue-pro-text)', fontSize: '10px', fontWeight: 800, letterSpacing: '0.08em' }}
                         >
                           {isSavingPreferences ? 'SAVING...' : 'SAVE'}
                         </button>
@@ -2132,7 +2138,7 @@ export default function App() {
                               setStylePreferencesDraft((prev) => ({ ...prev, styleVibe: event.target.value }))
                             }
                             className="w-full rounded-xl px-3 py-2"
-                            style={{ border: '2px solid #000', background: '#fff', fontSize: '12px', fontWeight: 700 }}
+                            style={{ border: '2px solid var(--clue-border)', background: 'var(--clue-surface)', fontSize: '12px', fontWeight: 700 }}
                           >
                             <option value="no-preference">No preference</option>
                             <option value="minimal">Minimal</option>
@@ -2152,7 +2158,7 @@ export default function App() {
                               setStylePreferencesDraft((prev) => ({ ...prev, colorPalette: event.target.value }))
                             }
                             className="w-full rounded-xl px-3 py-2"
-                            style={{ border: '2px solid #000', background: '#fff', fontSize: '12px', fontWeight: 700 }}
+                            style={{ border: '2px solid var(--clue-border)', background: 'var(--clue-surface)', fontSize: '12px', fontWeight: 700 }}
                           >
                             <option value="no-preference">No preference</option>
                             <option value="neutrals">Neutrals</option>
@@ -2174,7 +2180,7 @@ export default function App() {
                           }
                           placeholder="e.g. avoid heels, love oversized layers, prefer comfy workwear"
                           className="min-h-20 w-full resize-none rounded-xl px-3 py-2"
-                          style={{ border: '2px solid #000', background: '#fff', fontSize: '12px', fontWeight: 600 }}
+                          style={{ border: '2px solid var(--clue-border)', background: 'var(--clue-surface)', fontSize: '12px', fontWeight: 600 }}
                         />
                       </label>
                     </div>
@@ -2186,8 +2192,8 @@ export default function App() {
                           setCurrentView('wardrobe');
                           document.getElementById('wardrobe-panel')?.scrollIntoView({ behavior: 'smooth' });
                         }}
-                        className="px-6 py-3 rounded-full text-white inline-flex items-center gap-2"
-                        style={{ background: '#000', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
+                        className="px-6 py-3 rounded-full text-[var(--clue-inverse-text)] inline-flex items-center gap-2"
+                        style={{ background: 'var(--clue-inverse)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
                       >
                         {t('MAKE ME LOOK EXPENSIVE', 'OPEN MY WARDROBE')}
                         <ChevronRight className="w-4 h-4" strokeWidth={2.5} />
@@ -2196,7 +2202,7 @@ export default function App() {
                         type="button"
                         onClick={() => setCurrentView('outfits')}
                         className="px-6 py-3 rounded-full inline-flex items-center gap-2"
-                        style={{ background: '#FFF', border: '2px solid #000', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
+                        style={{ background: 'var(--clue-surface)', border: '2px solid var(--clue-border)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em' }}
                       >
                         {t('OPEN MY HITS', 'VIEW SAVED OUTFITS')}
                       </button>
@@ -2205,7 +2211,7 @@ export default function App() {
 
                   <div
                     className="rounded-2xl p-4"
-                    style={{ background: '#FFF', border: '2px solid #000' }}
+                    style={{ background: 'var(--clue-surface)', border: '2px solid var(--clue-border)' }}
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.7 }}>
@@ -2227,7 +2233,7 @@ export default function App() {
                         }}
                         className="w-full text-left"
                       >
-                        <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-black mb-3">
+                        <div className="relative aspect-[3/4] rounded-xl overflow-hidden border-2 border-[var(--clue-border)] mb-3">
                           <Image
                             src={latestTryOn.imageUrl}
                             alt="Most recent try-on"
@@ -2247,7 +2253,7 @@ export default function App() {
                     ) : (
                       <div
                         className="rounded-xl p-4"
-                        style={{ background: '#FFE5F1', border: '2px solid #000' }}
+                        style={{ background: 'var(--clue-surface-accent)', border: '2px solid var(--clue-border)' }}
                       >
                         <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: 4 }}>
                           {t('No fashion experiments yet', 'No try-ons yet')}
@@ -2273,7 +2279,7 @@ export default function App() {
                 className="mb-6 inline-block px-4 py-2 rounded-full"
                 style={{
                   background: 'rgba(255, 255, 255, 0.6)',
-                  border: '2px solid #000'
+                  border: '2px solid var(--clue-border)'
                 }}
               >
                 <span className="tracking-[0.1em] uppercase" style={{ fontSize: '10px', fontWeight: 700 }}>
@@ -2321,7 +2327,7 @@ export default function App() {
                 fontSize: isLoggedIn ? '16px' : 'clamp(15px, 2.5vw, 18px)',
                 lineHeight: isLoggedIn ? 1.6 : 1.65,
                 fontWeight: 500,
-                color: isLoggedIn ? undefined : 'rgba(0,0,0,0.78)',
+                color: isLoggedIn ? undefined : 'var(--clue-text-muted)',
               }}
             >
               {isLoggedIn ? (
@@ -2343,11 +2349,11 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7, duration: 0.8 }}
                 whileHover={{ scale: 1.05, y: -2 }}
-                className={`text-white transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3 ${
+                className={`text-[var(--clue-inverse-text)] transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3 ${
                   isLoggedIn ? 'px-10 py-4' : 'px-10 py-4 sm:px-12 sm:py-4'
                 }`}
                 style={{
-                  background: '#000000',
+                  background: 'var(--clue-inverse)',
                   fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.1em',
@@ -2380,11 +2386,11 @@ export default function App() {
                   className="px-8 py-4 sm:px-10 rounded-full inline-flex items-center gap-2 transition-opacity hover:opacity-85"
                   style={{
                     background: 'rgba(255, 255, 255, 0.75)',
-                    border: '2px solid #000',
+                    border: '2px solid var(--clue-border)',
                     fontSize: '11px',
                     fontWeight: 700,
                     letterSpacing: '0.1em',
-                    boxShadow: '4px 4px 0 #000',
+                    boxShadow: 'var(--clue-shadow-sm)',
                   }}
                 >
                   HOW IT WORKS
@@ -2398,10 +2404,10 @@ export default function App() {
                   transition={{ delay: 0.8, duration: 0.8 }}
                   whileHover={{ scale: 1.05, y: -2 }}
                   onClick={() => setShowChat(true)}
-                  className="px-10 py-4 text-black transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
+                  className="px-10 py-4 text-[var(--clue-text)] transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
                   style={{
                     background: 'linear-gradient(135deg, #FFE5C8 0%, #FFD4B8 100%)',
-                    border: '3px solid #000',
+                    border: '3px solid var(--clue-border)',
                     fontSize: '12px',
                     fontWeight: 700,
                     letterSpacing: '0.1em',
@@ -2448,8 +2454,8 @@ export default function App() {
                     className="p-7 md:p-8 rounded-3xl text-left"
                     style={{
                       background: idx === 1 ? 'rgba(255, 255, 255, 0.82)' : '#FFE5C8',
-                      border: '3px solid #000',
-                      boxShadow: '8px 8px 0 #000',
+                      border: '3px solid var(--clue-border)',
+                      boxShadow: 'var(--clue-shadow-lg)',
                     }}
                   >
                     <span
@@ -2458,8 +2464,8 @@ export default function App() {
                         fontSize: '10px',
                         fontWeight: 800,
                         letterSpacing: '0.12em',
-                        background: '#000',
-                        color: '#fff',
+                        background: 'var(--clue-inverse)',
+                        color: 'var(--clue-pro-text)',
                       }}
                     >
                       {card.kicker}
@@ -2467,7 +2473,7 @@ export default function App() {
                     <h3 className="mb-3" style={{ fontSize: 'clamp(18px, 2.2vw, 22px)', fontWeight: 900, letterSpacing: '-0.02em' }}>
                       {card.title}
                     </h3>
-                    <p style={{ fontSize: '14px', lineHeight: 1.65, fontWeight: 500, color: 'rgba(0,0,0,0.78)' }}>
+                    <p style={{ fontSize: '14px', lineHeight: 1.65, fontWeight: 500, color: 'var(--clue-text-muted)' }}>
                       {card.body}
                     </p>
                   </motion.div>
@@ -2501,7 +2507,7 @@ export default function App() {
             }}>
               {isLoggedIn ? t('AI-POWERED OUTFIT RECOMMENDATIONS', 'AI-POWERED OUTFIT RECOMMENDATIONS') : t('OUTFITS THAT FIT YOUR REAL LIFE', 'OUTFITS BUILT FOR YOUR LIFESTYLE')}
             </h2>
-            <p className={`max-w-[640px] mx-auto text-pretty ${isLoggedIn ? 'mb-8' : 'mb-2'}`} style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'rgba(0,0,0,0.78)' }}>
+            <p className={`max-w-[640px] mx-auto text-pretty ${isLoggedIn ? 'mb-8' : 'mb-2'}`} style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'var(--clue-text-muted)' }}>
               {isLoggedIn ? (
                 <>{t("Just tell us what you're doing today. Our AI considers your location, weather, personal style, and occasion to suggest the perfect outfit.", "Describe your day and our AI will factor in your location, weather, and personal style to recommend the right outfit.")}</>
               ) : (
@@ -2545,13 +2551,13 @@ export default function App() {
                 className="p-6 rounded-2xl text-center"
                 style={{
                   background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
-                  border: '3px solid #000',
-                  boxShadow: '6px 6px 0 #000'
+                  border: '3px solid var(--clue-border)',
+                  boxShadow: 'var(--clue-shadow-md)'
                 }}
               >
                 <div className="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center" style={{
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: '#fff'
+                  color: 'var(--clue-pro-text)'
                 }}>
                   {feature.icon}
                 </div>
@@ -2575,13 +2581,13 @@ export default function App() {
             className="p-8 rounded-3xl text-center"
             style={{
               background: 'rgba(255, 255, 255, 0.7)',
-              border: '3px solid #000',
-              boxShadow: '8px 8px 0 #000'
+              border: '3px solid var(--clue-border)',
+              boxShadow: 'var(--clue-shadow-lg)'
             }}
           >
             <div className="inline-block px-4 py-2 rounded-full mb-6" style={{
-              background: '#FFE5C8',
-              border: '2px solid #000'
+              background: 'var(--clue-surface-warm)',
+              border: '2px solid var(--clue-border)'
             }}>
               <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em' }}>
                 {t('TRY ASKING', 'EXAMPLE PROMPTS')}
@@ -2603,8 +2609,8 @@ export default function App() {
                   transition={{ duration: 0.5, delay: idx * 0.1 }}
                   className="p-4 rounded-2xl text-left"
                   style={{
-                    background: '#FFE5F1',
-                    border: '2px solid #000'
+                    background: 'var(--clue-surface-accent)',
+                    border: '2px solid var(--clue-border)'
                   }}
                 >
                   <p style={{ fontSize: '14px', fontWeight: 600, fontStyle: 'italic' }}>
@@ -2618,7 +2624,7 @@ export default function App() {
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setShowChat(true)}
-              className="mt-8 px-10 py-4 text-white transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
+              className="mt-8 px-10 py-4 text-[var(--clue-inverse-text)] transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
               style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 fontSize: '12px',
@@ -2655,7 +2661,7 @@ export default function App() {
             }}>
               {isLoggedIn ? t('YOUR TRY-ON WORKSPACE', 'YOUR TRY-ON WORKSPACE') : t('BUILD YOUR DIGITAL WARDROBE', 'BUILD YOUR DIGITAL WARDROBE')}
             </h2>
-            <p className="max-w-[640px] mx-auto text-pretty" style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'rgba(0,0,0,0.78)' }}>
+            <p className="max-w-[640px] mx-auto text-pretty" style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'var(--clue-text-muted)' }}>
               {isLoggedIn ? (
                 <>{t('Your wardrobe takes priority here: select items, preview instantly, and run try-ons without distractions.', 'Select items from your wardrobe, preview them instantly, and run try-ons without distractions.')}</>
               ) : (
@@ -2683,8 +2689,8 @@ export default function App() {
                 <div className="p-8 md:p-12 rounded-3xl min-w-0"
                   style={{
                     background: 'rgba(255, 255, 255, 0.7)',
-                    border: '3px solid #000',
-                    boxShadow: '12px 12px 0 #000'
+                    border: '3px solid var(--clue-border)',
+                    boxShadow: 'var(--clue-shadow-hero)'
                   }}
                 >
                   {wardrobeItems.length === 0 ? (
@@ -2704,14 +2710,14 @@ export default function App() {
                         <button
                           type="button"
                           onClick={handleSignUpCTA}
-                          className="px-10 py-3.5 rounded-full text-white transition-opacity hover:opacity-90"
+                          className="px-10 py-3.5 rounded-full text-[var(--clue-inverse-text)] transition-opacity hover:opacity-90"
                           style={{
-                            background: '#000',
+                            background: 'var(--clue-inverse)',
                             fontSize: '11px',
                             fontWeight: 700,
                             letterSpacing: '0.12em',
-                            border: '2px solid #000',
-                            boxShadow: '6px 6px 0 #000',
+                            border: '2px solid var(--clue-border)',
+                            boxShadow: 'var(--clue-shadow-md)',
                           }}
                         >
                           CREATE FREE ACCOUNT
@@ -2740,12 +2746,12 @@ export default function App() {
                                   fontWeight: 700,
                                   letterSpacing: '0.12em',
                                   textTransform: 'uppercase',
-                                  color: active ? '#000' : 'rgba(0,0,0,0.45)'
+                                  color: active ? 'var(--clue-text)' : 'var(--clue-text-subtle)'
                                 }}
                               >
                                 {category}
                                 <motion.span
-                                  className="absolute left-3 right-3 -bottom-0.5 h-[2px] bg-black"
+                                  className="absolute left-3 right-3 -bottom-0.5 h-[2px] bg-[var(--clue-inverse)]"
                                   initial={false}
                                   animate={{ scaleX: active ? 1 : 0, opacity: active ? 1 : 0 }}
                                   transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
@@ -2764,9 +2770,9 @@ export default function App() {
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             onClick={() => setShowUpload(true)}
-                            className="px-4 py-2 rounded-full text-white flex items-center gap-2"
+                            className="px-4 py-2 rounded-full text-[var(--clue-inverse-text)] flex items-center gap-2"
                             style={{
-                              background: '#000',
+                              background: 'var(--clue-inverse)',
                               fontSize: '11px',
                               fontWeight: 700,
                               letterSpacing: '0.05em'
@@ -2790,8 +2796,8 @@ export default function App() {
                           placeholder="Search by code, type, title..."
                           className="min-w-0 flex-1 rounded-full px-4 py-3 outline-none transition-[box-shadow,border-color] duration-200 ease-out"
                           style={{
-                            background: '#fff',
-                            border: '2px solid #000',
+                            background: 'var(--clue-surface)',
+                            border: '2px solid var(--clue-border)',
                             fontSize: '13px',
                             fontWeight: 600,
                             boxShadow: '4px 4px 0 rgba(0,0,0,0.12)',
@@ -2803,8 +2809,8 @@ export default function App() {
                             onClick={() => setWardrobeSearchQuery('')}
                             className="self-start rounded-full px-4 py-2 transition-opacity hover:opacity-70 active:opacity-60 sm:self-auto"
                             style={{
-                              background: '#FFE5C8',
-                              border: '2px solid #000',
+                              background: 'var(--clue-surface-warm)',
+                              border: '2px solid var(--clue-border)',
                               fontSize: '11px',
                               fontWeight: 800,
                               letterSpacing: '0.06em',
@@ -2820,7 +2826,7 @@ export default function App() {
                       <div className="relative">
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-7 md:gap-x-4 md:gap-y-9 mb-8 min-h-[420px]">
                   {getCategoryItems(selectedCategory).length === 0 && wardrobeSearchQuery.trim() && (
-                    <div className="col-span-full flex min-h-[320px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-black/25 bg-white/45 px-6 text-center">
+                    <div className="col-span-full flex min-h-[320px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-[var(--clue-border-soft)] bg-[var(--clue-surface)]/45 px-6 text-center">
                       <p className="mb-2" style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '-0.01em' }}>
                         No matching pieces
                       </p>
@@ -2831,7 +2837,7 @@ export default function App() {
                         type="button"
                         onClick={() => setWardrobeSearchQuery('')}
                         className="rounded-full px-5 py-2 transition-opacity hover:opacity-75"
-                        style={{ background: '#000', color: '#fff', fontSize: '11px', fontWeight: 800, letterSpacing: '0.08em' }}
+                        style={{ background: 'var(--clue-inverse)', color: 'var(--clue-pro-text)', fontSize: '11px', fontWeight: 800, letterSpacing: '0.08em' }}
                       >
                         SHOW ALL
                       </button>
@@ -2878,14 +2884,14 @@ export default function App() {
                             {/* Selected: subtle filled dot in the top-right (no heavy ring/border). */}
                             {isSelected && (
                               <span
-                                className="absolute top-2 right-2 w-2 h-2 rounded-full bg-black"
+                                className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[var(--clue-inverse)]"
                                 aria-hidden
                               />
                             )}
 
                             {/* Hover quick-action: tiny "+" / "✓" badge that fades in under the cursor — yeezy-style. */}
                             <span
-                              className={`pointer-events-none absolute bottom-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full text-white opacity-0 translate-y-1 transition-[opacity,transform] duration-[var(--duration-base)] ease-[var(--ease-out)] group-hover:opacity-100 group-hover:translate-y-0 ${isSelected ? 'bg-black' : 'bg-black/85'}`}
+                              className={`pointer-events-none absolute bottom-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full text-[var(--clue-inverse-text)] opacity-0 translate-y-1 transition-[opacity,transform] duration-[var(--duration-base)] ease-[var(--ease-out)] group-hover:opacity-100 group-hover:translate-y-0 ${isSelected ? 'bg-[var(--clue-inverse)]' : 'bg-[var(--clue-inverse)]/85'}`}
                               aria-hidden
                             >
                               {isSelected ? (
@@ -2900,13 +2906,13 @@ export default function App() {
                             {/* Monospace product code — always visible, yeezy signature. Underlines when selected. */}
                             <div
                               className={`font-mono leading-none tracking-[0.04em] transition-[color,text-decoration-color] duration-[var(--duration-base)] ${isSelected ? 'underline decoration-2 underline-offset-[6px]' : 'no-underline'}`}
-                              style={{ fontSize: '11px', fontWeight: 700, color: '#000' }}
+                              style={{ fontSize: '11px', fontWeight: 700, color: 'var(--clue-text)' }}
                             >
                               {item.code.toUpperCase()}
                             </div>
                             {titleText && (
                               <div
-                                className="mt-1.5 line-clamp-1 text-black/55 group-hover:text-black/80 transition-colors duration-[var(--duration-base)]"
+                                className="mt-1.5 line-clamp-1 text-[var(--clue-text)]/55 group-hover:text-[var(--clue-text)]/80 transition-colors duration-[var(--duration-base)]"
                                 style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.04em' }}
                               >
                                 {titleText.length > 28 ? `${titleText.slice(0, 28)}…` : titleText}
@@ -2919,7 +2925,7 @@ export default function App() {
                           type="button"
                           onClick={() => void handleDeleteWardrobeItem(item)}
                           disabled={isDeleting}
-                          className="absolute top-1.5 left-1.5 inline-flex items-center justify-center w-7 h-7 rounded-full bg-white text-black border-2 border-black opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-red-100 transition-opacity duration-200 ease-out disabled:opacity-100 disabled:cursor-wait shadow-[2px_2px_0_#000]"
+                          className="absolute top-1.5 left-1.5 inline-flex items-center justify-center w-7 h-7 rounded-full bg-[var(--clue-surface)] text-[var(--clue-text)] border-2 border-[var(--clue-border)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-red-100 transition-opacity duration-200 ease-out disabled:opacity-100 disabled:cursor-wait shadow-[var(--clue-shadow-sm)]"
                           aria-label={`Remove ${titleText ?? item.type} from wardrobe`}
                           title="Remove from wardrobe"
                         >
@@ -2944,8 +2950,8 @@ export default function App() {
                               disabled={!getPaginatedItems(selectedCategory).hasPrev}
                               className="px-6 py-3 rounded-full flex items-center gap-2 disabled:opacity-30 disabled:grayscale transition-opacity duration-200 ease-out order-1 sm:order-none"
                               style={{
-                                background: '#FFE5C8',
-                                border: '2px solid #000',
+                                background: 'var(--clue-surface-warm)',
+                                border: '2px solid var(--clue-border)',
                                 fontSize: '12px',
                                 fontWeight: 700,
                                 letterSpacing: '0.05em'
@@ -2965,7 +2971,7 @@ export default function App() {
                                     className="h-[3px] rounded-full transition-[width,background-color,opacity] duration-[var(--duration-slow)] ease-[var(--ease-out)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-black focus-visible:outline-offset-2"
                                     style={{
                                       width: active ? '22px' : '10px',
-                                      background: active ? '#000' : 'rgba(0, 0, 0, 0.25)'
+                                      background: active ? 'var(--clue-inverse)' : 'var(--clue-border-soft)'
                                     }}
                                     aria-label={`Page ${idx + 1}`}
                                     aria-current={active ? 'page' : undefined}
@@ -2982,8 +2988,8 @@ export default function App() {
                               disabled={!getPaginatedItems(selectedCategory).hasNext}
                               className="px-6 py-3 rounded-full flex items-center gap-2 disabled:opacity-30 disabled:grayscale transition-opacity duration-200 ease-out order-2 sm:order-none"
                               style={{
-                                background: '#FFE5C8',
-                                border: '2px solid #000',
+                                background: 'var(--clue-surface-warm)',
+                                border: '2px solid var(--clue-border)',
                                 fontSize: '12px',
                                 fontWeight: 700,
                                 letterSpacing: '0.05em'
@@ -3010,14 +3016,14 @@ export default function App() {
                   className="p-6 rounded-3xl"
                   style={{
                     background: 'rgba(255, 255, 255, 0.7)',
-                    border: '3px solid #000',
-                    boxShadow: '12px 12px 0 #000'
+                    border: '3px solid var(--clue-border)',
+                    boxShadow: 'var(--clue-shadow-hero)'
                   }}
                 >
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-2 min-w-0">
                     <div className="inline-block px-4 py-2 rounded-full shrink-0" style={{
-                      background: '#FFE5C8',
-                      border: '2px solid #000'
+                      background: 'var(--clue-surface-warm)',
+                      border: '2px solid var(--clue-border)'
                     }}>
                       <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em' }}>
                         LIVE PREVIEW · {VTO_STAGE_LABELS[vtoStage]}
@@ -3050,9 +3056,9 @@ export default function App() {
                           <motion.button
                             whileHover={{ scale: 1.05 }}
                             onClick={() => setShowSelfieUpload(true)}
-                            className="px-6 py-3 rounded-full text-white"
+                            className="px-6 py-3 rounded-full text-[var(--clue-inverse-text)]"
                             style={{
-                              background: '#000',
+                              background: 'var(--clue-inverse)',
                               fontSize: '12px',
                               fontWeight: 700,
                               letterSpacing: '0.05em'
@@ -3074,15 +3080,15 @@ export default function App() {
                     )}
 
                     {isGeneratingTryOn && (
-                      <div className="absolute inset-x-3 bottom-3 z-30 rounded-xl border-2 border-black bg-white/90 p-3 backdrop-blur-sm">
+                      <div className="absolute inset-x-3 bottom-3 z-30 rounded-xl border-2 border-[var(--clue-border)] bg-[var(--clue-surface)]/90 p-3 backdrop-blur-sm">
                         <div className="mb-2 flex items-center justify-end">
                           <span style={{ fontSize: '10px', fontWeight: 700 }}>
                             {Math.round(vtoProgress)}%
                           </span>
                         </div>
-                        <div className="h-2 w-full rounded-full bg-black/15">
+                        <div className="h-2 w-full rounded-full bg-[var(--clue-inverse)]/15">
                           <div
-                            className="h-2 rounded-full bg-black transition-all duration-500"
+                            className="h-2 rounded-full bg-[var(--clue-inverse)] transition-all duration-500"
                             style={{ width: `${Math.max(8, Math.min(100, vtoProgress))}%` }}
                           />
                         </div>
@@ -3193,7 +3199,7 @@ export default function App() {
 
                   {vtoError && (
                     <div
-                      className="mb-4 rounded-xl border-2 border-black p-3"
+                      className="mb-4 rounded-xl border-2 border-[var(--clue-border)] p-3"
                       style={{ background: '#FDE8E8' }}
                       role="alert"
                     >
@@ -3221,7 +3227,7 @@ export default function App() {
                             className="h-full rounded-full transition-all duration-500"
                             style={{
                               width: `${Math.max(0, Math.min(100, ((tryOnQuota.dailyRemaining ?? 0) / (tryOnQuota.dailyLimit ?? 4)) * 100))}%`,
-                              background: (tryOnQuota.dailyRemaining ?? 0) <= 1 ? '#EF4444' : '#000',
+                              background: (tryOnQuota.dailyRemaining ?? 0) <= 1 ? 'var(--clue-danger)' : 'var(--clue-inverse)',
                             }}
                           />
                         </div>
@@ -3236,7 +3242,7 @@ export default function App() {
                             className="h-full rounded-full transition-all duration-500"
                             style={{
                               width: `${Math.max(0, Math.min(100, ((tryOnQuota.totalRemaining ?? 0) / (tryOnQuota.totalLimit ?? 20)) * 100))}%`,
-                              background: (tryOnQuota.totalRemaining ?? 0) <= 3 ? '#EF4444' : '#000',
+                              background: (tryOnQuota.totalRemaining ?? 0) <= 3 ? 'var(--clue-danger)' : 'var(--clue-inverse)',
                             }}
                           />
                         </div>
@@ -3246,7 +3252,7 @@ export default function App() {
 
                   {/* Upgrade nudge when quota is exhausted */}
                   {!isPro && tryOnQuota !== null && isLoggedIn && ((tryOnQuota.dailyRemaining ?? 1) <= 0 || (tryOnQuota.totalRemaining ?? 1) <= 0) && (
-                    <div className="mb-2 rounded-xl p-3 text-center" style={{ background: '#000', color: '#fff' }}>
+                    <div className="mb-2 rounded-xl p-3 text-center" style={{ background: 'var(--clue-inverse)', color: 'var(--clue-pro-text)' }}>
                       <p style={{ fontSize: '11px', fontWeight: 700, marginBottom: '6px' }}>
                         {(tryOnQuota.dailyRemaining ?? 1) <= 0
                           ? t("Daily looks used up — come back tomorrow or go Pro", "Daily limit reached — upgrade for unlimited")
@@ -3257,7 +3263,7 @@ export default function App() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-block px-4 py-1.5 rounded-full"
-                        style={{ background: '#FF69B4', color: '#000', fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}
+                        style={{ background: '#FF69B4', color: 'var(--clue-text)', fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}
                       >
                         {t(`GO PRO — €${PRO_PRICE_OFFER_EUR}/mo`, `UPGRADE TO PRO — €${PRO_PRICE_OFFER_EUR}/mo`)}
                       </a>
@@ -3270,9 +3276,9 @@ export default function App() {
                       whileTap={{ scale: 0.98 }}
                       onClick={handleTryOn}
                       disabled={isGeneratingTryOn || !userSelfie || activeTryOnGarments.length === 0 || (!isPro && tryOnQuota !== null && ((tryOnQuota.dailyRemaining ?? 1) <= 0 || (tryOnQuota.totalRemaining ?? 1) <= 0))}
-                      className="w-full py-3 px-4 rounded-full text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-3 px-4 rounded-full text-[var(--clue-inverse-text)] disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{
-                        background: '#000',
+                        background: 'var(--clue-inverse)',
                         fontSize: '11px',
                         fontWeight: 700,
                         letterSpacing: '0.1em'
@@ -3290,8 +3296,8 @@ export default function App() {
                       disabled={isGeneratingTryOn || !userSelfie || activeTryOnGarments.length === 0}
                       className="w-full py-3 px-4 rounded-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       style={{
-                        background: '#FFF',
-                        border: '2px solid #000',
+                        background: 'var(--clue-surface)',
+                        border: '2px solid var(--clue-border)',
                         fontSize: '11px',
                         fontWeight: 700,
                         letterSpacing: '0.08em'
@@ -3310,7 +3316,7 @@ export default function App() {
                         !selectedOutfit.bottoms &&
                         !selectedOutfit.accessories
                       }
-                      className="w-full py-3 px-4 rounded-full text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="w-full py-3 px-4 rounded-full text-[var(--clue-inverse-text)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       style={{
                         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                         fontSize: '11px',
@@ -3329,8 +3335,8 @@ export default function App() {
                       onClick={() => setShowSelfieUpload(true)}
                       className="w-full py-3 px-4 rounded-full flex items-center justify-center gap-2"
                       style={{
-                        background: '#FFF',
-                        border: '2px solid #000',
+                        background: 'var(--clue-surface)',
+                        border: '2px solid var(--clue-border)',
                         fontSize: '11px',
                         fontWeight: 700,
                         letterSpacing: '0.08em'
@@ -3348,8 +3354,8 @@ export default function App() {
                         rel="noreferrer"
                         className="w-full py-3 px-4 rounded-full flex items-center justify-center gap-2"
                         style={{
-                          background: '#FFF',
-                          border: '2px solid #000',
+                          background: 'var(--clue-surface)',
+                          border: '2px solid var(--clue-border)',
                           fontSize: '11px',
                           fontWeight: 700,
                           letterSpacing: '0.08em'
@@ -3366,8 +3372,8 @@ export default function App() {
                       onClick={() => setSelectedOutfit({})}
                       className="w-full py-3 px-4 rounded-full"
                       style={{
-                        background: '#FFE5C8',
-                        border: '2px solid #000',
+                        background: 'var(--clue-surface-warm)',
+                        border: '2px solid var(--clue-border)',
                         fontSize: '11px',
                         fontWeight: 700,
                         letterSpacing: '0.1em'
@@ -3396,7 +3402,7 @@ export default function App() {
                               setTryOnImageUrl(entry.imageUrl);
                               setTryOnPreviewUrl(entry.imageUrl);
                             }}
-                            className="relative aspect-[3/4] overflow-hidden rounded-lg border-2 border-black hover:opacity-90 active:opacity-80"
+                            className="relative aspect-[3/4] overflow-hidden rounded-lg border-2 border-[var(--clue-border)] hover:opacity-90 active:opacity-80"
                             title={`Open try-on ${new Date(entry.createdAt).toLocaleString()}`}
                           >
                             <Image
@@ -3422,8 +3428,8 @@ export default function App() {
                               }
                               className="px-4 py-2 rounded-full"
                               style={{
-                                background: '#FFF',
-                                border: '2px solid #000',
+                                background: 'var(--clue-surface)',
+                                border: '2px solid var(--clue-border)',
                                 fontSize: '10px',
                                 fontWeight: 700,
                                 letterSpacing: '0.08em',
@@ -3437,8 +3443,8 @@ export default function App() {
                               onClick={() => setVisibleTryOnCount(TRYON_HISTORY_PAGE_SIZE)}
                               className="px-4 py-2 rounded-full"
                               style={{
-                                background: '#FFF',
-                                border: '2px solid #000',
+                                background: 'var(--clue-surface)',
+                                border: '2px solid var(--clue-border)',
                                 fontSize: '10px',
                                 fontWeight: 700,
                                 letterSpacing: '0.08em',
@@ -3470,8 +3476,8 @@ export default function App() {
             >
               <div className="max-w-[1200px] mx-auto p-8 md:p-12 rounded-3xl" style={{
                 background: 'rgba(255, 255, 255, 0.7)',
-                border: '3px solid #000',
-                boxShadow: '12px 12px 0 #000'
+                border: '3px solid var(--clue-border)',
+                boxShadow: 'var(--clue-shadow-hero)'
               }}>
                 <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -3496,7 +3502,7 @@ export default function App() {
                       type="button"
                       onClick={() => void refreshSavedOutfits()}
                       disabled={savedOutfitsLoading}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 border-black bg-white hover:opacity-85 active:opacity-70 disabled:opacity-50 transition-opacity shrink-0 self-start"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border-2 border-[var(--clue-border)] bg-[var(--clue-surface)] hover:opacity-85 active:opacity-70 disabled:opacity-50 transition-opacity shrink-0 self-start"
                       style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em' }}
                       aria-busy={savedOutfitsLoading}
                       aria-label="Refresh saved outfits from server"
@@ -3523,9 +3529,9 @@ export default function App() {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       onClick={() => setCurrentView('wardrobe')}
-                      className="px-8 py-3 rounded-full text-white"
+                      className="px-8 py-3 rounded-full text-[var(--clue-inverse-text)]"
                       style={{
-                        background: '#000',
+                        background: 'var(--clue-inverse)',
                         fontSize: '12px',
                         fontWeight: 700,
                         letterSpacing: '0.05em'
@@ -3546,9 +3552,9 @@ export default function App() {
                         whileHover={{ y: -4 }}
                         className="p-6 rounded-2xl"
                         style={{
-                          background: '#fff',
-                          border: '3px solid #000',
-                          boxShadow: '6px 6px 0 #000'
+                          background: 'var(--clue-surface)',
+                          border: '3px solid var(--clue-border)',
+                          boxShadow: 'var(--clue-shadow-md)'
                         }}
                       >
                         <div
@@ -3595,7 +3601,7 @@ export default function App() {
                           {tryOnUrl && (
                             <div
                               className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full"
-                              style={{ background: '#000', color: '#fff', fontSize: '9px', fontWeight: 800, letterSpacing: '0.06em', pointerEvents: 'none' }}
+                              style={{ background: 'var(--clue-inverse)', color: 'var(--clue-pro-text)', fontSize: '9px', fontWeight: 800, letterSpacing: '0.06em', pointerEvents: 'none' }}
                             >
                               <Sparkles className="w-2.5 h-2.5" strokeWidth={2.5} />
                               TRY-ON
@@ -3621,7 +3627,7 @@ export default function App() {
                           )}
                         </div>
 
-                        <div className="mt-4 pt-4 border-t-2 border-black/10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                        <div className="mt-4 pt-4 border-t-2 border-[var(--clue-border)]/10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                           <span className="break-words" style={{ fontSize: '10px', opacity: 0.6, fontWeight: 600 }}>
                             Saved {new Date(outfit.savedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
                           </span>
@@ -3631,9 +3637,9 @@ export default function App() {
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
                               onClick={() => handleApplySavedOutfit(outfit)}
-                              className="px-4 py-2 rounded-full text-white"
+                              className="px-4 py-2 rounded-full text-[var(--clue-inverse-text)]"
                               style={{
-                                background: '#000',
+                                background: 'var(--clue-inverse)',
                                 fontSize: '10px',
                                 fontWeight: 800,
                                 letterSpacing: '0.08em',
@@ -3646,7 +3652,7 @@ export default function App() {
                               type="button"
                               onClick={() => void handleDeleteSavedOutfit(outfit)}
                               disabled={deletingOutfitId === outfit.id}
-                              className="px-3 py-2 rounded-full border-2 border-black/30 text-xs font-bold hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out disabled:opacity-40"
+                              className="px-3 py-2 rounded-full border-2 border-[var(--clue-border)]/30 text-xs font-bold hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out disabled:opacity-40"
                               aria-label={`Delete saved outfit: ${wardrobeItemLabel(outfit.tops) || 'outfit'}`}
                             >
                               {deletingOutfitId === outfit.id ? '…' : 'DELETE'}
@@ -3690,12 +3696,12 @@ export default function App() {
                 whileHover={{ y: -4 }}
                 className="p-6 rounded-2xl"
                 style={{
-                  background: '#FFE5C8',
-                  border: '3px solid #000',
-                  boxShadow: '6px 6px 0 #000'
+                  background: 'var(--clue-surface-warm)',
+                  border: '3px solid var(--clue-border)',
+                  boxShadow: 'var(--clue-shadow-md)'
                 }}
               >
-                <div className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-full bg-[var(--clue-inverse)] text-[var(--clue-inverse-text)] flex items-center justify-center mb-4">
                   {feature.icon}
                 </div>
                 <h3 className="mb-2" style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '0.05em' }}>
@@ -3724,9 +3730,9 @@ export default function App() {
               className="space-y-6"
             >
               <div className="p-8 rounded-3xl" style={{
-                background: '#FFE5C8',
-                border: '3px solid #000',
-                boxShadow: '8px 8px 0 #000'
+                background: 'var(--clue-surface-warm)',
+                border: '3px solid var(--clue-border)',
+                boxShadow: 'var(--clue-shadow-lg)'
               }}>
                 <h3 className="mb-4" style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.01em' }}>
                   VIRTUAL TRY-ON
@@ -3738,8 +3744,8 @@ export default function App() {
 
               <div className="p-8 rounded-3xl aspect-square relative overflow-hidden" style={{
                 background: 'rgba(255, 255, 255, 0.7)',
-                border: '3px solid #000',
-                boxShadow: '8px 8px 0 #000'
+                border: '3px solid var(--clue-border)',
+                boxShadow: 'var(--clue-shadow-lg)'
               }}>
                 <Image
                   src="https://images.unsplash.com/photo-1567113463300-102a7eb3cb26?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwd2FyZHJvYmUlMjBjbG9zZXQlMjBmYXNoaW9ufGVufDF8fHx8MTc3NjA3OTMyN3ww&ixlib=rb-4.1.0&q=80&w=1080"
@@ -3760,9 +3766,9 @@ export default function App() {
               className="space-y-6"
             >
               <div className="p-8 rounded-3xl" style={{
-                background: '#FFE5C8',
-                border: '3px solid #000',
-                boxShadow: '8px 8px 0 #000'
+                background: 'var(--clue-surface-warm)',
+                border: '3px solid var(--clue-border)',
+                boxShadow: 'var(--clue-shadow-lg)'
               }}>
                 <h3 className="mb-4" style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.01em' }}>
                   OUT THE DOOR FASTER
@@ -3773,9 +3779,9 @@ export default function App() {
               </div>
 
               <div className="p-8 rounded-3xl" style={{
-                background: '#FFE5C8',
-                border: '3px solid #000',
-                boxShadow: '8px 8px 0 #000'
+                background: 'var(--clue-surface-warm)',
+                border: '3px solid var(--clue-border)',
+                boxShadow: 'var(--clue-shadow-lg)'
               }}>
                 <h3 className="mb-4" style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '-0.01em' }}>
                   YOUR CLOSET, ORGANIZED
@@ -3794,9 +3800,9 @@ export default function App() {
                       handleSignUpCTA();
                     }
                   }}
-                  className="w-full py-3 px-6 rounded-full text-white"
+                  className="w-full py-3 px-6 rounded-full text-[var(--clue-inverse-text)]"
                   style={{
-                    background: '#000',
+                    background: 'var(--clue-inverse)',
                     fontSize: '12px',
                     fontWeight: 700,
                     letterSpacing: '0.1em'
@@ -3823,13 +3829,13 @@ export default function App() {
               className="p-10 md:p-16 rounded-3xl text-center"
               style={{
                 background: 'rgba(255, 255, 255, 0.7)',
-                border: '3px solid #000',
-                boxShadow: '12px 12px 0 #000'
+                border: '3px solid var(--clue-border)',
+                boxShadow: 'var(--clue-shadow-hero)'
               }}
             >
               <span className="inline-block px-4 py-2 rounded-full mb-6" style={{
-                background: '#FFE5C8',
-                border: '2px solid #000',
+                background: 'var(--clue-surface-warm)',
+                border: '2px solid var(--clue-border)',
                 fontSize: '10px',
                 fontWeight: 700,
                 letterSpacing: '0.1em'
@@ -3864,9 +3870,9 @@ export default function App() {
                     transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1], delay: idx * 0.06 }}
                     className="p-6 rounded-2xl"
                     style={{
-                      background: '#FFE5C8',
-                      border: '3px solid #000',
-                      boxShadow: '4px 4px 0 #000'
+                      background: 'var(--clue-surface-warm)',
+                      border: '3px solid var(--clue-border)',
+                      boxShadow: 'var(--clue-shadow-sm)'
                     }}
                   >
                     <div style={{ fontSize: '40px', fontWeight: 900, lineHeight: 1 }} className="mb-2">
@@ -3893,9 +3899,9 @@ export default function App() {
           transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className={`max-w-[1000px] mx-auto text-center rounded-3xl ${isLoggedIn ? 'p-12 md:p-16' : 'p-10 md:p-14'}`}
           style={{
-            background: '#000',
-            color: '#fff',
-            border: '3px solid #000',
+            background: 'var(--clue-inverse)',
+            color: 'var(--clue-pro-text)',
+            border: '3px solid var(--clue-border)',
             boxShadow: '12px 12px 0 rgba(0, 0, 0, 0.3)'
           }}
         >
@@ -3916,14 +3922,14 @@ export default function App() {
               <>
                 FINALLY AN APP THAT REMEMBERS WHAT I OWN.
                 <br />
-                <span className="text-white/85" style={{ fontSize: '0.72em', fontWeight: 800 }}>
+                <span className="text-[var(--clue-inverse-text)]/85" style={{ fontSize: '0.72em', fontWeight: 800 }}>
                   The chat actually uses my closet—not a random moodboard.
                 </span>
               </>
             )}
           </h2>
           <div className="flex items-center justify-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-300 to-pink-500 border-2 border-white shrink-0" />
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-300 to-pink-500 border-2 border-[var(--clue-pro-text)] shrink-0" />
             <div className="text-left min-w-0">
               <div style={{ fontSize: '14px', fontWeight: 700 }}>Jordan M.</div>
               <div style={{ fontSize: '12px', fontWeight: 500, opacity: 0.7 }}>Early user, product design</div>
@@ -3954,7 +3960,7 @@ export default function App() {
             <br />
             CLUELESS AGAIN
           </h2>
-          <p className={`max-w-[32rem] mx-auto text-pretty ${isLoggedIn ? 'mb-12' : 'mb-6 md:mb-8'}`} style={{ fontSize: '16px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'rgba(0,0,0,0.76)' }}>
+          <p className={`max-w-[32rem] mx-auto text-pretty ${isLoggedIn ? 'mb-12' : 'mb-6 md:mb-8'}`} style={{ fontSize: '16px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'var(--clue-text-muted)' }}>
             {isLoggedIn ? (
               <>Join thousands making the most of what they already own. Start building your digital wardrobe today.</>
             ) : (
@@ -3962,7 +3968,7 @@ export default function App() {
             )}
           </p>
           {!isLoggedIn && (
-            <p className="max-w-[36rem] mx-auto text-pretty mb-10 md:mb-12 px-2" style={{ fontSize: '12px', lineHeight: 1.6, fontWeight: 600, color: 'rgba(0,0,0,0.5)' }}>
+            <p className="max-w-[36rem] mx-auto text-pretty mb-10 md:mb-12 px-2" style={{ fontSize: '12px', lineHeight: 1.6, fontWeight: 600, color: 'var(--clue-text-subtle)' }}>
               Accounts and core wardrobe features are free. Optional AI try-on uses paid cloud GPU when you run it—see your provider&apos;s billing (e.g. Replicate).
             </p>
           )}
@@ -3975,9 +3981,9 @@ export default function App() {
                 ? document.getElementById('wardrobe-panel')?.scrollIntoView({ behavior: 'smooth' })
                 : handleSignUpCTA()
             }
-            className="px-12 py-5 text-white transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
+            className="px-12 py-5 text-[var(--clue-inverse-text)] transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
             style={{
-              background: '#000',
+              background: 'var(--clue-inverse)',
               fontSize: '13px',
               fontWeight: 700,
               letterSpacing: '0.1em',
@@ -4004,8 +4010,8 @@ export default function App() {
             className="fixed bottom-8 right-8 z-[60] w-16 h-16 rounded-full flex items-center justify-center shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-shadow duration-200 ease-out"
             style={{
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: '#fff',
-              border: '3px solid #000'
+              color: 'var(--clue-pro-text)',
+              border: '3px solid var(--clue-border)'
             }}
             type="button"
             aria-label="Open AI stylist chat"
@@ -4022,9 +4028,9 @@ export default function App() {
             onClick={() => setShowUpload(true)}
             className="fixed bottom-28 right-8 z-[60] w-14 h-14 rounded-full flex items-center justify-center shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-shadow duration-200 ease-out"
             style={{
-              background: '#000',
-              color: '#fff',
-              border: '3px solid #000'
+              background: 'var(--clue-inverse)',
+              color: 'var(--clue-pro-text)',
+              border: '3px solid var(--clue-border)'
             }}
             type="button"
             aria-label="Add wardrobe item"
@@ -4087,6 +4093,7 @@ export default function App() {
             location={location}
             weather={weather}
             wardrobeItems={wardrobeItems}
+            stylePreferences={stylePreferences}
           />
         )}
       </AnimatePresence>
@@ -4098,7 +4105,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16 }}
-            className="fixed inset-0 z-[90] bg-black/70 p-4 md:p-8"
+            className="fixed inset-0 z-[90] bg-[var(--clue-inverse)]/70 p-4 md:p-8"
             onClick={() => setTryOnPreviewUrl(null)}
           >
             <div className="mx-auto flex h-full w-full max-w-[980px] items-center justify-center">
@@ -4107,13 +4114,13 @@ export default function App() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.98, opacity: 0 }}
                 transition={{ duration: 0.16 }}
-                className="relative h-full max-h-[92vh] w-full overflow-hidden rounded-2xl border-[3px] border-black bg-white shadow-[10px_10px_0_#000]"
+                className="relative h-full max-h-[92vh] w-full overflow-hidden rounded-2xl border-[3px] border-[var(--clue-border)] bg-[var(--clue-surface)] shadow-[var(--clue-shadow-xl)]"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
                   type="button"
                   onClick={() => setTryOnPreviewUrl(null)}
-                  className="absolute right-3 top-3 z-10 h-9 w-9 rounded-full border-2 border-black bg-white text-xl font-bold leading-none hover:opacity-80"
+                  className="absolute right-3 top-3 z-10 h-9 w-9 rounded-full border-2 border-[var(--clue-border)] bg-[var(--clue-surface)] text-xl font-bold leading-none hover:opacity-80"
                   aria-label="Close try-on preview"
                 >
                   ×
@@ -4134,7 +4141,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Plans Section */}
-      <section id="pricing" className="px-6 md:px-12 lg:px-20 py-20 border-t-4 border-black scroll-mt-28">
+      <section id="pricing" className="px-6 md:px-12 lg:px-20 py-20 border-t-4 border-[var(--clue-border)] scroll-mt-28">
           <div className="max-w-[1400px] mx-auto">
             <div className="text-center mb-14">
               <h2 className="mb-3" style={{ fontSize: 'clamp(28px, 5vw, 48px)', fontWeight: 900, letterSpacing: '-0.02em' }}>
@@ -4147,7 +4154,7 @@ export default function App() {
 
             <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
               {/* Free Plan */}
-              <div className="rounded-2xl border-4 border-black bg-white p-8 flex flex-col" style={{ boxShadow: '6px 6px 0 #000' }}>
+              <div className="rounded-2xl border-4 border-[var(--clue-border)] bg-[var(--clue-surface)] p-8 flex flex-col" style={{ boxShadow: 'var(--clue-shadow-md)' }}>
                 <div className="mb-6">
                   <p className="uppercase mb-2" style={{ fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', opacity: 0.4 }}>{t('On the House', 'Free Tier')}</p>
                   <h3 style={{ fontSize: '28px', fontWeight: 900 }}>Free</h3>
@@ -4166,7 +4173,7 @@ export default function App() {
                     t('Community support', 'Community support'),
                   ].map((feat) => (
                     <li key={feat} className="flex items-start gap-3">
-                      <span className="mt-0.5 w-5 h-5 rounded-full border-2 border-black bg-white flex items-center justify-center shrink-0" style={{ fontSize: '11px', fontWeight: 900 }}>✓</span>
+                      <span className="mt-0.5 w-5 h-5 rounded-full border-2 border-[var(--clue-border)] bg-[var(--clue-surface)] flex items-center justify-center shrink-0" style={{ fontSize: '11px', fontWeight: 900 }}>✓</span>
                       <span style={{ fontSize: '14px', fontWeight: 500 }}>{feat}</span>
                     </li>
                   ))}
@@ -4175,7 +4182,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleSignUpCTA}
-                    className="w-full py-4 rounded-xl border-2 border-black font-bold hover:bg-black hover:text-white transition-all duration-200"
+                    className="w-full py-4 rounded-xl border-2 border-[var(--clue-border)] font-bold hover:bg-[var(--clue-inverse)] hover:text-[var(--clue-inverse-text)] transition-all duration-200"
                     style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em' }}
                   >
                     START FREE
@@ -4184,8 +4191,8 @@ export default function App() {
                   <button
                     type="button"
                     disabled
-                    className="w-full py-4 rounded-xl border-2 border-black font-bold cursor-default"
-                    style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em', background: 'rgba(0,0,0,0.06)' }}
+                    className="w-full py-4 rounded-xl border-2 border-[var(--clue-border)] font-bold cursor-default"
+                    style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em', background: 'var(--clue-hover-overlay)' }}
                   >
                     CURRENT PLAN
                   </button>
@@ -4193,12 +4200,12 @@ export default function App() {
               </div>
 
               {/* Pro Plan */}
-              <div className="rounded-2xl border-4 border-black p-8 flex flex-col relative overflow-hidden" style={{ background: '#000', color: '#fff', boxShadow: '6px 6px 0 #FF69B4' }}>
+              <div className="rounded-2xl border-4 border-[var(--clue-border)] p-8 flex flex-col relative overflow-hidden" style={{ background: 'var(--clue-inverse)', color: 'var(--clue-pro-text)', boxShadow: 'var(--clue-shadow-accent)' }}>
                 <div className="absolute top-5 right-5 flex flex-col items-end gap-2">
-                  <span className="px-3 py-1 rounded-full border-2 border-white" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em' }}>
+                  <span className="px-3 py-1 rounded-full border-2 border-[var(--clue-pro-text)]" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em' }}>
                     {t('🔥 MOST SLAY', 'MOST POPULAR')}
                   </span>
-                  <span className="px-3 py-1 rounded-full" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em', background: '#FF69B4', color: '#000' }}>
+                  <span className="px-3 py-1 rounded-full" style={{ fontSize: '10px', fontWeight: 900, letterSpacing: '0.08em', background: '#FF69B4', color: 'var(--clue-text)' }}>
                     {t('50% OFF RN', '50% OFF')}
                   </span>
                 </div>
@@ -4228,7 +4235,7 @@ export default function App() {
                     t('Priority support (we got you)', 'Priority support'),
                   ].map((feat) => (
                     <li key={feat} className="flex items-start gap-3">
-                      <span className="mt-0.5 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shrink-0" style={{ fontSize: '11px', fontWeight: 900 }}>✓</span>
+                      <span className="mt-0.5 w-5 h-5 rounded-full border-2 border-[var(--clue-pro-text)] flex items-center justify-center shrink-0" style={{ fontSize: '11px', fontWeight: 900 }}>✓</span>
                       <span style={{ fontSize: '14px', fontWeight: 500 }}>{feat}</span>
                     </li>
                   ))}
@@ -4238,7 +4245,7 @@ export default function App() {
                     <button
                       type="button"
                       disabled
-                      className="w-full py-4 rounded-xl border-2 border-white font-bold cursor-default mb-3"
+                      className="w-full py-4 rounded-xl border-2 border-[var(--clue-pro-text)] font-bold cursor-default mb-3"
                       style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em', opacity: 0.5 }}
                     >
                       {t('ALREADY SLAYING ✓', 'CURRENT PLAN')}
@@ -4261,7 +4268,7 @@ export default function App() {
                     href={proCheckoutHref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full py-4 rounded-xl border-2 border-white font-bold hover:bg-white hover:text-black active:opacity-90 transition-all duration-200 text-center block"
+                    className="w-full py-4 rounded-xl border-2 border-[var(--clue-pro-text)] font-bold hover:bg-[var(--clue-surface)] hover:text-[var(--clue-text)] active:opacity-90 transition-all duration-200 text-center block"
                     style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '0.05em' }}
                   >
                     {t("LET'S COOK — UPGRADE NOW", 'UPGRADE TO PRO')}
@@ -4273,13 +4280,13 @@ export default function App() {
         </section>
 
       {/* Footer */}
-      <footer className="px-6 md:px-12 lg:px-20 py-16 border-t-4 border-black">
+      <footer className="px-6 md:px-12 lg:px-20 py-16 border-t-4 border-[var(--clue-border)]">
         <div className="max-w-[1400px] mx-auto">
           <div className="grid md:grid-cols-3 gap-8 mb-12">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center">
-                  <Shirt className="w-4 h-4 text-white" strokeWidth={2} />
+                <div className="w-8 h-8 rounded-full bg-[var(--clue-inverse)] flex items-center justify-center">
+                  <Shirt className="w-4 h-4 text-[var(--clue-inverse-text)]" strokeWidth={2} />
                 </div>
                 <span className="tracking-[0.05em] uppercase" style={{ fontSize: '14px', fontWeight: 900 }}>Clueless</span>
               </div>
@@ -4343,7 +4350,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="pt-8 border-t-2 border-black flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="pt-8 border-t-2 border-[var(--clue-border)] flex flex-col md:flex-row justify-between items-center gap-4">
             <div style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em' }}>
               © 2026 CLUELESS. ALL RIGHTS RESERVED.
             </div>
@@ -4354,7 +4361,7 @@ export default function App() {
                 setLangMode(next);
                 localStorage.setItem('clueless_lang_mode', next);
               }}
-              className="flex items-center gap-1.5 rounded-full border-2 border-black px-3 py-1 hover:bg-black hover:text-white transition-all duration-200"
+              className="flex items-center gap-1.5 rounded-full border-2 border-[var(--clue-border)] px-3 py-1 hover:bg-[var(--clue-inverse)] hover:text-[var(--clue-inverse-text)] transition-all duration-200"
               style={{ fontSize: '10px', fontWeight: 800, letterSpacing: '0.06em' }}
               aria-label="Toggle language style"
             >
@@ -4394,14 +4401,14 @@ export default function App() {
                 src={lightboxImageUrl}
                 alt="Try-on result"
                 className="w-full rounded-2xl"
-                style={{ border: '3px solid #fff', boxShadow: '0 24px 60px rgba(0,0,0,0.6)' }}
+                style={{ border: '3px solid var(--clue-dialog-ring)', boxShadow: '0 24px 60px var(--clue-overlay)' }}
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
               />
               <button
                 type="button"
                 onClick={() => setLightboxImageUrl(null)}
                 className="absolute -top-3 -right-3 w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ background: '#fff', border: '2px solid #000', fontSize: '14px', fontWeight: 900, lineHeight: 1 }}
+                style={{ background: 'var(--clue-surface)', border: '2px solid var(--clue-border)', fontSize: '14px', fontWeight: 900, lineHeight: 1 }}
                 aria-label="Close"
               >
                 ×

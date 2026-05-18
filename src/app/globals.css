@@ -21,8 +21,18 @@ body {
   select:focus-visible,
   summary:focus-visible,
   [role="tab"]:focus-visible {
-    outline: 2px solid #000;
+    outline: 2px solid var(--clue-focus, #000);
     outline-offset: 3px;
+  }
+
+  .dark button:focus-visible,
+  .dark a[href]:focus-visible,
+  .dark input:focus-visible,
+  .dark textarea:focus-visible,
+  .dark select:focus-visible,
+  .dark summary:focus-visible,
+  .dark [role="tab"]:focus-visible {
+    outline-color: var(--clue-focus);
   }
 
   input:focus-visible,

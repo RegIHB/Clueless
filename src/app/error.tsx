@@ -18,14 +18,14 @@ export default function Error({
         className="max-w-[480px] w-full text-center p-8 md:p-10 rounded-3xl transition-shadow duration-200"
         style={{
           background: 'rgba(255, 255, 255, 0.85)',
-          border: '3px solid #000',
-          boxShadow: '8px 8px 0 #000',
+          border: '3px solid var(--clue-border)',
+          boxShadow: 'var(--clue-shadow-lg)',
         }}
       >
         <h1 className="mb-3 font-black tracking-tight uppercase" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.5rem)' }}>
           Something went wrong
         </h1>
-        <p className="mb-6 text-black/75 break-words leading-relaxed" style={{ fontSize: '15px', fontWeight: 500 }}>
+        <p className="mb-6 text-[var(--clue-text-muted)] break-words leading-relaxed" style={{ fontSize: '15px', fontWeight: 500 }}>
           {error.message}
         </p>
         <button

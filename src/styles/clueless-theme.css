@@ -1,0 +1,81 @@
+/* Clueless brand surfaces — light/dark via next-themes (.dark on html) */
+
+:root {
+  --clue-page-bg: linear-gradient(180deg, #ffb3d9 0%, #ffc9e5 50%, #ffe5f1 100%);
+  --clue-dot: #000000;
+  --clue-text: #0a0a0a;
+  --clue-text-muted: rgba(0, 0, 0, 0.72);
+  --clue-text-subtle: rgba(0, 0, 0, 0.55);
+  --clue-border: #000000;
+  --clue-border-soft: rgba(0, 0, 0, 0.1);
+  --clue-header-bg: rgba(255, 255, 255, 0.85);
+  --clue-glass: rgba(255, 255, 255, 0.82);
+  --clue-surface: #ffffff;
+  --clue-surface-muted: rgba(255, 255, 255, 0.74);
+  --clue-surface-accent: #ffe5f1;
+  --clue-surface-warm: #ffe5c8;
+  --clue-inverse: #000000;
+  --clue-inverse-text: #ffffff;
+  --clue-accent: #ff69b4;
+  --clue-accent-text: #000000;
+  --clue-shadow-sm: 4px 4px 0 #000000;
+  --clue-shadow-md: 6px 6px 0 #000000;
+  --clue-shadow-lg: 8px 8px 0 #000000;
+  --clue-shadow-xl: 10px 10px 0 #000000;
+  --clue-shadow-hero: 12px 12px 0 #000000;
+  --clue-shadow-accent: 6px 6px 0 #ff69b4;
+  --clue-hover-overlay: rgba(0, 0, 0, 0.06);
+  --clue-pro-surface: #000000;
+  --clue-pro-text: #ffffff;
+  --clue-focus: #000000;
+  --clue-danger: #ef4444;
+  --clue-overlay: rgba(0, 0, 0, 0.7);
+  --clue-dialog-ring: #ffffff;
+}
+
+.dark {
+  --clue-page-bg: linear-gradient(180deg, #2a1520 0%, #16121c 48%, #0f0e14 100%);
+  --clue-dot: rgba(255, 255, 255, 0.14);
+  --clue-text: #f7f2f4;
+  --clue-text-muted: rgba(247, 242, 244, 0.76);
+  --clue-text-subtle: rgba(247, 242, 244, 0.52);
+  --clue-border: rgba(255, 255, 255, 0.88);
+  --clue-border-soft: rgba(255, 255, 255, 0.16);
+  --clue-header-bg: rgba(16, 14, 22, 0.92);
+  --clue-glass: rgba(24, 21, 32, 0.88);
+  --clue-surface: #1e1a26;
+  --clue-surface-muted: rgba(30, 26, 38, 0.94);
+  --clue-surface-accent: #2d2434;
+  --clue-surface-warm: #3a2c24;
+  --clue-inverse: #f7f2f4;
+  --clue-inverse-text: #121018;
+  --clue-accent: #ff69b4;
+  --clue-accent-text: #121018;
+  --clue-shadow-sm: 4px 4px 0 rgba(255, 105, 180, 0.45);
+  --clue-shadow-md: 6px 6px 0 rgba(255, 105, 180, 0.45);
+  --clue-shadow-lg: 8px 8px 0 rgba(255, 105, 180, 0.45);
+  --clue-shadow-xl: 10px 10px 0 rgba(255, 105, 180, 0.45);
+  --clue-shadow-hero: 12px 12px 0 rgba(255, 105, 180, 0.45);
+  --clue-shadow-accent: 6px 6px 0 rgba(255, 105, 180, 0.55);
+  --clue-hover-overlay: rgba(255, 255, 255, 0.08);
+  --clue-pro-surface: #f7f2f4;
+  --clue-pro-text: #121018;
+  --clue-focus: #f7f2f4;
+  --clue-danger: #f87171;
+  --clue-overlay: rgba(0, 0, 0, 0.82);
+  --clue-dialog-ring: rgba(255, 255, 255, 0.92);
+}
+
+.clueless-app {
+  color: var(--clue-text);
+}
+
+.clueless-app :where(select, textarea, input:not([type='checkbox']):not([type='radio'])) {
+  background: var(--clue-surface);
+  color: var(--clue-text);
+  border-color: var(--clue-border);
+}
+
+.dark .clueless-app :where(select, textarea, input:not([type='checkbox']):not([type='radio'])) {
+  color-scheme: dark;
+}
