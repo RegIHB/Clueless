@@ -67,8 +67,8 @@ export function OnboardingFlow({ onComplete, userName }: OnboardingFlowProps) {
             transition={{ type: 'spring', damping: 20 }}
             className="w-24 h-24 rounded-full mx-auto mb-8 flex items-center justify-center"
             style={{
-              background: '#000',
-              color: '#fff'
+              background: 'var(--clue-inverse)',
+              color: 'var(--clue-inverse-text)'
             }}
           >
             {currentStep.icon}
@@ -117,7 +117,7 @@ export function OnboardingFlow({ onComplete, userName }: OnboardingFlowProps) {
               className="h-2 rounded-full transition-[width,background-color] duration-300 ease-out"
               style={{
                 width: idx === step ? '40px' : '8px',
-                background: idx === step ? '#000' : 'rgba(0, 0, 0, 0.2)'
+                background: idx === step ? '#000' : 'var(--clue-border-soft)'
               }}
             />
           ))}
@@ -134,7 +134,7 @@ export function OnboardingFlow({ onComplete, userName }: OnboardingFlowProps) {
               className="px-8 py-4 rounded-full"
               style={{
                 background: 'rgba(255, 255, 255, 0.8)',
-                border: '2px solid #000',
+                border: '2px solid var(--clue-border)',
                 fontSize: '14px',
                 fontWeight: 700,
                 letterSpacing: '0.05em'
@@ -148,9 +148,9 @@ export function OnboardingFlow({ onComplete, userName }: OnboardingFlowProps) {
             whileHover={{ scale: 1.05, y: -2 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleNext}
-            className="px-10 py-4 rounded-full text-white"
+            className="px-10 py-4 rounded-full text-[var(--clue-inverse-text)]"
             style={{
-              background: '#000',
+              background: 'var(--clue-inverse)',
               fontSize: '14px',
               fontWeight: 700,
               letterSpacing: '0.05em',

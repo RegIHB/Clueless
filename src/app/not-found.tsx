@@ -9,11 +9,11 @@ export default function NotFound() {
     >
       <div
         className="w-full max-w-md text-center p-8 sm:p-10 rounded-3xl"
-        style={{ background: "#fff", border: "4px solid #000", boxShadow: "12px 12px 0 #000" }}
+        style={{ background: 'var(--clue-surface)', border: '4px solid var(--clue-border)', boxShadow: 'var(--clue-shadow-hero)' }}
       >
         <div
           className="mx-auto mb-6 w-14 h-14 rounded-full flex items-center justify-center"
-          style={{ background: "#000", color: "#fff" }}
+          style={{ background: 'var(--clue-inverse)', color: 'var(--clue-inverse-text)' }}
           aria-hidden
         >
           <Shirt className="w-7 h-7" strokeWidth={2} />
@@ -31,9 +31,9 @@ export default function NotFound() {
           href="/"
           className="inline-flex items-center justify-center px-8 py-3 rounded-full text-white transition-transform duration-[var(--duration-fast)] ease-[var(--ease-out)] hover:scale-[1.03] active:scale-[0.97]"
           style={{
-            background: "#000",
-            border: "2px solid #000",
-            boxShadow: "6px 6px 0 #000",
+            background: 'var(--clue-inverse)',
+            border: '2px solid var(--clue-border)',
+            boxShadow: 'var(--clue-shadow-md)',
             fontSize: "11px",
             fontWeight: 700,
             letterSpacing: "0.12em",

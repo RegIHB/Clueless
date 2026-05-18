@@ -31,9 +31,9 @@ export default function BillingSuccessPage() {
         {/* Icon */}
         <div
           className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-8"
-          style={{ background: '#000', boxShadow: '6px 6px 0 #FF69B4' }}
+          style={{ background: 'var(--clue-inverse)', boxShadow: 'var(--clue-shadow-accent)' }}
         >
-          <Sparkles className="w-10 h-10 text-white" strokeWidth={2} />
+          <Sparkles className="w-10 h-10 text-[var(--clue-inverse-text)]" strokeWidth={2} />
         </div>
 
         {/* Heading */}
@@ -50,7 +50,7 @@ export default function BillingSuccessPage() {
         {/* Perks */}
         <div
           className="rounded-2xl p-6 mb-10 text-left"
-          style={{ background: '#fff', border: '3px solid #000', boxShadow: '6px 6px 0 #000' }}
+          style={{ background: 'var(--clue-surface)', border: '3px solid var(--clue-border)', boxShadow: 'var(--clue-shadow-md)' }}
         >
           <p className="mb-4" style={{ fontSize: '11px', fontWeight: 900, letterSpacing: '0.08em', opacity: 0.5 }}>
             WHAT YOU JUST UNLOCKED
@@ -73,9 +73,9 @@ export default function BillingSuccessPage() {
         <button
           type="button"
           onClick={() => router.push('/?upgraded=1')}
-          className="w-full py-4 rounded-2xl text-white mb-4"
+          className="w-full py-4 rounded-2xl text-[var(--clue-inverse-text)] mb-4"
           style={{
-            background: '#000',
+            background: 'var(--clue-inverse)',
             fontSize: '14px',
             fontWeight: 800,
             letterSpacing: '0.05em',

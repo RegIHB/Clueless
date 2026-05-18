@@ -7,6 +7,14 @@ import { wantsOutfitRecommendation } from "@/lib/outfit-intent";
 import { requireAuth } from "@/app/api/_helpers/auth";
 import { rateLimit } from "@/app/api/_helpers/rate-limit";
 import type { WardrobeItem } from "@/types/wardrobe";
+import type { ProfilePreferences } from "@/lib/supabase/sync";
+import {
+  buildRagUserPrompt,
+  outfitSuggestionFromRag,
+  retrieveWardrobeContextWithFallback,
+  stylistSystemPrompt,
+  type ChatTurn,
+} from "@/lib/stylist-rag";
 
 const wardrobeItemSchema = z.object({
   code: z.string().min(1).max(120),
@@ -15,65 +23,49 @@ const wardrobeItemSchema = z.object({
   title: z.string().max(500).optional(),
 });
 
+const historyTurnSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1).max(4000),
+});
+
 const requestSchema = z.object({
-  message: z.string().min(1),
+  message: z.string().min(1).max(2000),
   location: z.string().default("Berlin"),
   weather: z.object({
     temp: z.number().default(12),
     condition: z.string().default("Cloudy"),
   }),
   wardrobeItems: z.array(wardrobeItemSchema).max(120).optional().default([]),
+  history: z.array(historyTurnSchema).max(20).optional().default([]),
 });
 
 type ProviderResult = { reply: string };
 
-type StylePrefs = { styleVibe?: string; colorPalette?: string; notes?: string };
-
-function formatStylePrefs(prefs: StylePrefs | null | undefined): string {
-  if (!prefs) return '';
-  const parts: string[] = [];
-  if (prefs.styleVibe && prefs.styleVibe !== 'no-preference') parts.push(`style vibe: ${prefs.styleVibe}`);
-  if (prefs.colorPalette && prefs.colorPalette !== 'no-preference') parts.push(`colour palette: ${prefs.colorPalette}`);
-  if (prefs.notes) parts.push(`notes: ${prefs.notes}`);
-  if (parts.length === 0) return '';
-  return `The user's style preferences: ${parts.join('; ')}. Use these to personalise every response.\n\n`;
-}
-
-function stylistSystemPrompt(outfitMode: boolean, stylePrefs: StylePrefs | null | undefined): string {
-  const prefsBlock = formatStylePrefs(stylePrefs);
-  if (outfitMode) {
-    return `${prefsBlock}You are an AI fashion stylist. The user wants outfit help. Recommend only from the wardrobe items provided in the prompt; do not invent garments or item codes. Give concise, practical advice for their plans and the weather. No markdown headings.`;
-  }
-  return `${prefsBlock}You are a friendly AI fashion stylist chatting with the user. They are NOT asking for a full outfit yet (greeting, small talk, or general question). Reply warmly and briefly—one or two short paragraphs max. Do NOT list specific garments, SKUs, or a full outfit. If it fits naturally, invite them to share their plans or occasion when they want concrete suggestions. No markdown headings.`;
-}
-
-function wardrobePromptSummary(items: WardrobeItem[]): string {
-  if (items.length === 0) return "No wardrobe items are available yet.";
-  return items
-    .slice(0, 80)
-    .map((item) => {
-      const title = item.title ? ` — ${item.title}` : "";
-      return `${item.code} | ${item.category} | ${item.type}${title}`;
-    })
-    .join("\n");
-}
-
-async function callOpenAI(prompt: string, outfitMode: boolean, stylePrefs: StylePrefs | null): Promise<ProviderResult> {
+async function callOpenAI(
+  system: string,
+  userPrompt: string,
+  history: ChatTurn[]
+): Promise<ProviderResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
 
   const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
   const client = new OpenAI({ apiKey });
+
+  const historyMessages = history.slice(-6).map((t) => ({
+    role: t.role as "user" | "assistant",
+    content: t.content,
+  }));
+
   const completion = await client.chat.completions.create({
     model,
     messages: [
-      {
-        role: "system",
-        content: stylistSystemPrompt(outfitMode, stylePrefs),
-      },
-      { role: "user", content: prompt },
+      { role: "system", content: system },
+      ...historyMessages,
+      { role: "user", content: userPrompt },
     ],
-    max_completion_tokens: 500,
+    max_completion_tokens: 600,
+    temperature: 0.65,
   });
 
   const reply = completion.choices[0]?.message?.content?.trim();
@@ -84,21 +76,32 @@ async function callOpenAI(prompt: string, outfitMode: boolean, stylePrefs: Style
 function resolveAiProvider(): "openai" | "gemini" {
   const explicit = process.env.AI_PROVIDER?.trim().toLowerCase();
   if (explicit === "openai" || explicit === "gemini") return explicit;
-  // If only one key is set, use that provider (typical for Gemini free tier via AI Studio).
   if (process.env.GEMINI_API_KEY && !process.env.OPENAI_API_KEY) return "gemini";
   if (process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) return "openai";
   return "openai";
 }
 
-async function callGemini(prompt: string, outfitMode: boolean, stylePrefs: StylePrefs | null): Promise<ProviderResult> {
+async function callGemini(
+  system: string,
+  userPrompt: string,
+  history: ChatTurn[]
+): Promise<ProviderResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
-  // Free-tier friendly default; override with GEMINI_MODEL (e.g. gemini-2.5-flash).
   const modelId = process.env.GEMINI_MODEL?.trim() || "gemini-2.0-flash";
   const client = new GoogleGenerativeAI(apiKey);
   const model = client.getGenerativeModel({ model: modelId });
-  const fullPrompt = `${stylistSystemPrompt(outfitMode, stylePrefs)}\n\n${prompt}`;
+
+  const historyText =
+    history.length > 0
+      ? `${history
+          .slice(-6)
+          .map((t) => `${t.role === "user" ? "User" : "Stylist"}: ${t.content}`)
+          .join("\n")}\n\n`
+      : "";
+
+  const fullPrompt = `${system}\n\n${historyText}${userPrompt}`;
   const result = await model.generateContent(fullPrompt);
   const reply = result.response.text().trim();
   if (!reply) throw new Error("Gemini response empty");
@@ -112,7 +115,7 @@ export async function POST(request: NextRequest) {
     const limited = rateLimit({
       scope: "api:chat",
       subject: ctx.userId,
-      limit: 30,
+      limit: 40,
       windowMs: 10 * 60 * 1000,
     });
     if (limited) return limited;
@@ -122,43 +125,60 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { message, location, weather, wardrobeItems } = parsed.data;
+    const { message, location, weather, wardrobeItems, history } = parsed.data;
     const outfitMode = wantsOutfitRecommendation(message);
-    const fallback = buildFallbackSuggestion(message, weather.temp, weather.condition, wardrobeItems);
+    const wardrobe = wardrobeItems as WardrobeItem[];
 
-    let stylePrefs: StylePrefs | null = null;
+    let stylePrefs: ProfilePreferences | null = null;
     try {
       const { data } = await ctx.supabase
-        .from('profiles')
-        .select('style_preferences')
-        .eq('id', ctx.userId)
+        .from("profiles")
+        .select("style_preferences")
+        .eq("id", ctx.userId)
         .maybeSingle();
-      if (data?.style_preferences) stylePrefs = data.style_preferences as StylePrefs;
-    } catch { /* non-breaking: fall back to no preferences */ }
+      if (data?.style_preferences) stylePrefs = data.style_preferences as ProfilePreferences;
+    } catch {
+      /* non-breaking */
+    }
 
-    const prompt = [
-      `User location: ${location}.`,
-      `Weather: ${weather.temp}C and ${weather.condition}.`,
-      `Available wardrobe items:\n${wardrobePromptSummary(wardrobeItems)}`,
-      `User message: ${message}`,
-      outfitMode
-        ? "Give concise recommendations with practical reasoning. Mention item names or codes only from the available wardrobe list."
-        : "Respond conversationally only—no outfit rundown unless they ask.",
-    ].join("\n");
+    const rag = retrieveWardrobeContextWithFallback(
+      message,
+      wardrobe,
+      stylePrefs,
+      weather,
+      location,
+      history as ChatTurn[]
+    );
+
+    const system = stylistSystemPrompt(outfitMode, stylePrefs);
+    const userPrompt = buildRagUserPrompt({
+      message,
+      location,
+      weather,
+      rag,
+      outfitMode,
+      history: history as ChatTurn[],
+    });
+
+    const ruleFallback = buildFallbackSuggestion(message, weather.temp, weather.condition, wardrobe);
+    const ragOutfit = outfitSuggestionFromRag(
+      rag,
+      outfitMode ? "Personalised from your style DNA and closet." : ""
+    );
 
     let reply: string | null = null;
     const providerPreference = resolveAiProvider();
 
     const tryOpenAI = async () => {
       try {
-        reply = (await callOpenAI(prompt, outfitMode, stylePrefs)).reply;
+        reply = (await callOpenAI(system, userPrompt, history as ChatTurn[])).reply;
       } catch (err) {
         console.error("[chat] OpenAI failed:", err);
       }
     };
     const tryGemini = async () => {
       try {
-        reply = (await callGemini(prompt, outfitMode, stylePrefs)).reply;
+        reply = (await callGemini(system, userPrompt, history as ChatTurn[])).reply;
       } catch (err) {
         console.error("[chat] Gemini failed:", err);
       }
@@ -177,14 +197,33 @@ export async function POST(request: NextRequest) {
 
     const replyText = usedRuleBased
       ? outfitMode
-        ? `${fallback.reason} The picks below match your plans and the weather.`
-        : `Hey! When you’re ready, tell me what you’re doing today or the vibe you want—I’ll pull ideas from your wardrobe. It’s ${weather.temp}°C and ${weather.condition} in ${location} right now.`
+        ? `${ragOutfit.reason || ruleFallback.reason}`
+        : `Hey! I'm tuned to your style DNA. When you're ready, tell me the occasion — it's ${weather.temp}°C and ${weather.condition} in ${location}.`
       : trimmedReply;
+
+    const hasRagPieces =
+      ragOutfit.tops.length + ragOutfit.bottoms.length + ragOutfit.outerwear.length > 0;
+
+    const outfitSuggestion = outfitMode
+      ? hasRagPieces
+        ? ragOutfit
+        : ruleFallback
+      : null;
 
     return NextResponse.json({
       reply: replyText,
-      outfitSuggestion: outfitMode ? fallback : null,
-      ...(usedRuleBased ? { stylistMode: "rules" as const } : {}),
+      outfitSuggestion,
+      personalization: {
+        styleDnaApplied: Boolean(
+          stylePrefs &&
+            ((stylePrefs.styleVibe && stylePrefs.styleVibe !== "no-preference") ||
+              (stylePrefs.colorPalette && stylePrefs.colorPalette !== "no-preference") ||
+              stylePrefs.notes?.trim())
+        ),
+        retrievedCount: rag.items.length,
+        occasionHints: rag.occasionHints,
+      },
+      ...(usedRuleBased ? { stylistMode: "rules" as const } : { stylistMode: "rag" as const }),
     });
   } catch (error) {
     return NextResponse.json(
