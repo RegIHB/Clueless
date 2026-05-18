@@ -1872,8 +1872,9 @@ export default function App() {
                   onClick={() => setShowSelfieUpload(true)}
                   className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full hover:opacity-80 active:opacity-70 transition-all duration-200 ease-out shrink-0"
                   style={{
-                    background: 'linear-gradient(135deg, #FFE5C8 0%, #FFD4B8 100%)',
-                    border: '2px solid var(--clue-border)'
+                    background: 'var(--clue-gradient-warm)',
+                    border: '2px solid var(--clue-border)',
+                    color: 'var(--clue-text)',
                   }}
                 >
                   <Camera className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -2278,7 +2279,7 @@ export default function App() {
                 transition={{ delay: 0.2, duration: 0.6 }}
                 className="mb-6 inline-block px-4 py-2 rounded-full"
                 style={{
-                  background: 'rgba(255, 255, 255, 0.6)',
+                  background: 'var(--clue-panel-bg-soft)',
                   border: '2px solid var(--clue-border)'
                 }}
               >
@@ -2294,7 +2295,7 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15, duration: 0.6 }}
                 className="mb-5 md:mb-6 tracking-[0.22em] uppercase mx-auto max-w-xl"
-                style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(0,0,0,0.55)' }}
+                style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.22em', color: 'var(--clue-text-subtle)' }}
               >
                 {t('Digital wardrobe · AI stylist', 'Digital wardrobe · AI styling assistant')}
               </motion.p>
@@ -2327,7 +2328,7 @@ export default function App() {
                 fontSize: isLoggedIn ? '16px' : 'clamp(15px, 2.5vw, 18px)',
                 lineHeight: isLoggedIn ? 1.6 : 1.65,
                 fontWeight: 500,
-                color: isLoggedIn ? undefined : 'var(--clue-text-muted)',
+                color: 'var(--clue-text-muted)',
               }}
             >
               {isLoggedIn ? (
@@ -2357,7 +2358,7 @@ export default function App() {
                   fontSize: '12px',
                   fontWeight: 700,
                   letterSpacing: '0.1em',
-                  boxShadow: '0 10px 28px rgba(0, 0, 0, 0.22)'
+                  boxShadow: 'var(--clue-shadow-button)'
                 }}
                 onClick={() => {
                   if (!isLoggedIn) {
@@ -2385,8 +2386,9 @@ export default function App() {
                   }
                   className="px-8 py-4 sm:px-10 rounded-full inline-flex items-center gap-2 transition-opacity hover:opacity-85"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.75)',
+                    background: 'var(--clue-btn-secondary-bg)',
                     border: '2px solid var(--clue-border)',
+                    color: 'var(--clue-text)',
                     fontSize: '11px',
                     fontWeight: 700,
                     letterSpacing: '0.1em',
@@ -2406,12 +2408,12 @@ export default function App() {
                   onClick={() => setShowChat(true)}
                   className="px-10 py-4 text-[var(--clue-text)] transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
                   style={{
-                    background: 'linear-gradient(135deg, #FFE5C8 0%, #FFD4B8 100%)',
+                    background: 'var(--clue-gradient-warm)',
                     border: '3px solid var(--clue-border)',
                     fontSize: '12px',
                     fontWeight: 700,
                     letterSpacing: '0.1em',
-                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)'
+                    boxShadow: 'var(--clue-shadow-button-soft)'
                   }}
                 >
                   <Sparkles className="w-4 h-4" strokeWidth={2.5} />
@@ -2451,11 +2453,12 @@ export default function App() {
                   <motion.div
                     key={card.kicker}
                     whileHover={{ y: -4 }}
-                    className="p-7 md:p-8 rounded-3xl text-left"
+                    className="clue-surface-card p-7 md:p-8 rounded-3xl text-left"
                     style={{
-                      background: idx === 1 ? 'rgba(255, 255, 255, 0.82)' : '#FFE5C8',
+                      background: idx === 1 ? 'var(--clue-card-bg-alt)' : 'var(--clue-card-bg)',
                       border: '3px solid var(--clue-border)',
                       boxShadow: 'var(--clue-shadow-lg)',
+                      color: 'var(--clue-text)',
                     }}
                   >
                     <span
@@ -2465,15 +2468,26 @@ export default function App() {
                         fontWeight: 800,
                         letterSpacing: '0.12em',
                         background: 'var(--clue-inverse)',
-                        color: 'var(--clue-pro-text)',
+                        color: 'var(--clue-inverse-text)',
                       }}
                     >
                       {card.kicker}
                     </span>
-                    <h3 className="mb-3" style={{ fontSize: 'clamp(18px, 2.2vw, 22px)', fontWeight: 900, letterSpacing: '-0.02em' }}>
+                    <h3
+                      className="mb-3"
+                      style={{
+                        fontSize: 'clamp(18px, 2.2vw, 22px)',
+                        fontWeight: 900,
+                        letterSpacing: '-0.02em',
+                        color: 'var(--clue-text)',
+                      }}
+                    >
                       {card.title}
                     </h3>
-                    <p style={{ fontSize: '14px', lineHeight: 1.65, fontWeight: 500, color: 'var(--clue-text-muted)' }}>
+                    <p
+                      className="clue-muted"
+                      style={{ fontSize: '14px', lineHeight: 1.65, fontWeight: 500 }}
+                    >
                       {card.body}
                     </p>
                   </motion.div>
@@ -2507,7 +2521,7 @@ export default function App() {
             }}>
               {isLoggedIn ? t('AI-POWERED OUTFIT RECOMMENDATIONS', 'AI-POWERED OUTFIT RECOMMENDATIONS') : t('OUTFITS THAT FIT YOUR REAL LIFE', 'OUTFITS BUILT FOR YOUR LIFESTYLE')}
             </h2>
-            <p className={`max-w-[640px] mx-auto text-pretty ${isLoggedIn ? 'mb-8' : 'mb-2'}`} style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'var(--clue-text-muted)' }}>
+            <p className={`max-w-[640px] mx-auto text-pretty ${isLoggedIn ? 'mb-8' : 'mb-2'}`} style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: 'var(--clue-text-muted)' }}>
               {isLoggedIn ? (
                 <>{t("Just tell us what you're doing today. Our AI considers your location, weather, personal style, and occasion to suggest the perfect outfit.", "Describe your day and our AI will factor in your location, weather, and personal style to recommend the right outfit.")}</>
               ) : (
@@ -2548,23 +2562,27 @@ export default function App() {
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: idx * 0.1 }}
                 whileHover={{ y: -4 }}
-                className="p-6 rounded-2xl text-center"
+                className="clue-surface-card p-6 rounded-2xl text-center"
                 style={{
-                  background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                  background: 'var(--clue-gradient-ai-feature)',
                   border: '3px solid var(--clue-border)',
-                  boxShadow: 'var(--clue-shadow-md)'
+                  boxShadow: 'var(--clue-shadow-md)',
+                  color: 'var(--clue-text)',
                 }}
               >
                 <div className="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center" style={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: 'var(--clue-pro-text)'
+                  background: 'var(--clue-gradient-ai-icon)',
+                  color: '#ffffff',
                 }}>
                   {feature.icon}
                 </div>
-                <h3 className="mb-2" style={{ fontSize: '16px', fontWeight: 900, letterSpacing: '0.05em' }}>
+                <h3
+                  className="mb-2"
+                  style={{ fontSize: '16px', fontWeight: 900, letterSpacing: '0.05em', color: 'var(--clue-text)' }}
+                >
                   {feature.title}
                 </h3>
-                <p style={{ fontSize: '13px', lineHeight: 1.6, fontWeight: 500 }}>
+                <p className="clue-muted" style={{ fontSize: '13px', lineHeight: 1.6, fontWeight: 500 }}>
                   {feature.description}
                 </p>
               </motion.div>
@@ -2578,16 +2596,18 @@ export default function App() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
-            className="p-8 rounded-3xl text-center"
+            className="clue-surface-panel p-8 rounded-3xl text-center"
             style={{
-              background: 'rgba(255, 255, 255, 0.7)',
+              background: 'var(--clue-panel-bg)',
               border: '3px solid var(--clue-border)',
-              boxShadow: 'var(--clue-shadow-lg)'
+              boxShadow: 'var(--clue-shadow-lg)',
+              color: 'var(--clue-text)',
             }}
           >
             <div className="inline-block px-4 py-2 rounded-full mb-6" style={{
               background: 'var(--clue-surface-warm)',
-              border: '2px solid var(--clue-border)'
+              border: '2px solid var(--clue-border)',
+              color: 'var(--clue-text)',
             }}>
               <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em' }}>
                 {t('TRY ASKING', 'EXAMPLE PROMPTS')}
@@ -2610,7 +2630,8 @@ export default function App() {
                   className="p-4 rounded-2xl text-left"
                   style={{
                     background: 'var(--clue-surface-accent)',
-                    border: '2px solid var(--clue-border)'
+                    border: '2px solid var(--clue-border)',
+                    color: 'var(--clue-text)',
                   }}
                 >
                   <p style={{ fontSize: '14px', fontWeight: 600, fontStyle: 'italic' }}>
@@ -2626,7 +2647,7 @@ export default function App() {
               onClick={() => setShowChat(true)}
               className="mt-8 px-10 py-4 text-[var(--clue-inverse-text)] transition-[transform,box-shadow,opacity] duration-200 ease-out rounded-full inline-flex items-center gap-3"
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'var(--clue-gradient-ai-icon)',
                 fontSize: '12px',
                 fontWeight: 700,
                 letterSpacing: '0.1em',
@@ -2661,7 +2682,7 @@ export default function App() {
             }}>
               {isLoggedIn ? t('YOUR TRY-ON WORKSPACE', 'YOUR TRY-ON WORKSPACE') : t('BUILD YOUR DIGITAL WARDROBE', 'BUILD YOUR DIGITAL WARDROBE')}
             </h2>
-            <p className="max-w-[640px] mx-auto text-pretty" style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'var(--clue-text-muted)' }}>
+            <p className="max-w-[640px] mx-auto text-pretty" style={{ fontSize: '15px', lineHeight: 1.75, fontWeight: 500, color: 'var(--clue-text-muted)' }}>
               {isLoggedIn ? (
                 <>{t('Your wardrobe takes priority here: select items, preview instantly, and run try-ons without distractions.', 'Select items from your wardrobe, preview them instantly, and run try-ons without distractions.')}</>
               ) : (
@@ -2686,11 +2707,12 @@ export default function App() {
                 className={`grid gap-8 min-w-0 ${isLoggedIn ? 'xl:grid-cols-[minmax(0,1.75fr)_minmax(340px,0.95fr)] lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.9fr)]' : 'grid-cols-1'}`}
               >
                 {/* Wardrobe Grid Section */}
-                <div className="p-8 md:p-12 rounded-3xl min-w-0"
+                <motion.div className="clue-surface-panel p-8 md:p-12 rounded-3xl min-w-0"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.7)',
+                    background: 'var(--clue-panel-bg)',
                     border: '3px solid var(--clue-border)',
-                    boxShadow: 'var(--clue-shadow-hero)'
+                    boxShadow: 'var(--clue-shadow-hero)',
+                    color: 'var(--clue-text)',
                   }}
                 >
                   {wardrobeItems.length === 0 ? (
@@ -2698,13 +2720,13 @@ export default function App() {
                       <EmptyState onAddItem={() => setShowUpload(true)} />
                     ) : (
                       <div className="text-center py-14 md:py-20 px-6 sm:px-10 max-w-lg mx-auto">
-                        <p className="mb-2 tracking-[0.14em] uppercase" style={{ fontSize: '10px', fontWeight: 700, color: 'rgba(0,0,0,0.45)' }}>
+                        <p className="mb-2 tracking-[0.14em] uppercase" style={{ fontSize: '10px', fontWeight: 700, color: 'var(--clue-text-subtle)' }}>
                           {t('Members only', 'Sign in required')}
                         </p>
                         <h3 className="mb-4" style={{ fontSize: 'clamp(22px, 4vw, 28px)', fontWeight: 900, letterSpacing: '-0.02em' }}>
                           {t('Unlock your closet', 'Create a free account')}
                         </h3>
-                        <p className="mb-8" style={{ fontSize: '15px', lineHeight: 1.65, fontWeight: 500, color: 'rgba(0,0,0,0.72)' }}>
+                        <p className="mb-8" style={{ fontSize: '15px', lineHeight: 1.65, fontWeight: 500, color: 'var(--clue-text-muted)' }}>
                           {t('Create a free account to add pieces, run try-ons, save outfits, and chat with the stylist using your real wardrobe.', 'Create a free account to add items, run try-ons, save outfits, and get AI styling advice based on your actual wardrobe.')}
                         </p>
                         <button
@@ -2763,7 +2785,7 @@ export default function App() {
                         </div>
 
                         <div className="flex items-center gap-3">
-                          <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', opacity: 0.6 }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--clue-text-subtle)' }}>
                             {getCategoryItems(selectedCategory).length} ITEM{getCategoryItems(selectedCategory).length === 1 ? '' : 'S'}
                           </span>
                           <motion.button
@@ -2830,7 +2852,7 @@ export default function App() {
                       <p className="mb-2" style={{ fontSize: '18px', fontWeight: 900, letterSpacing: '-0.01em' }}>
                         No matching pieces
                       </p>
-                      <p className="mb-5 max-w-sm" style={{ fontSize: '13px', fontWeight: 600, lineHeight: 1.6, opacity: 0.65 }}>
+                      <p className="mb-5 max-w-sm" style={{ fontSize: '13px', fontWeight: 600, lineHeight: 1.6, color: 'var(--clue-text-muted)' }}>
                         Try a different code, garment type, or product title.
                       </p>
                       <button
@@ -3003,7 +3025,7 @@ export default function App() {
                       </div>
                     </>
                   )}
-                </div>
+                </motion.div>
 
               {/* Model preview / try-on — logged-in only */}
               {isLoggedIn && (
@@ -3013,11 +3035,12 @@ export default function App() {
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.8, delay: 0.4 }}
-                  className="p-6 rounded-3xl"
+                  className="clue-surface-panel p-6 rounded-3xl"
                   style={{
-                    background: 'rgba(255, 255, 255, 0.7)',
+                    background: 'var(--clue-panel-bg)',
                     border: '3px solid var(--clue-border)',
-                    boxShadow: 'var(--clue-shadow-hero)'
+                    boxShadow: 'var(--clue-shadow-hero)',
+                    color: 'var(--clue-text)',
                   }}
                 >
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-2 min-w-0">
@@ -3034,7 +3057,7 @@ export default function App() {
                         onClick={() => setShowSelfieUpload(true)}
                         className="p-2 rounded-full hover:opacity-60 active:opacity-50 transition-opacity duration-200 ease-out"
                         style={{
-                          background: 'rgba(0, 0, 0, 0.05)'
+                          background: 'var(--clue-hover-overlay)'
                         }}
                         title="Change photo"
                         type="button"
@@ -3200,7 +3223,7 @@ export default function App() {
                   {vtoError && (
                     <div
                       className="mb-4 rounded-xl border-2 border-[var(--clue-border)] p-3"
-                      style={{ background: '#FDE8E8' }}
+                      style={{ background: 'var(--clue-danger-surface)', color: 'var(--clue-text)' }}
                       role="alert"
                     >
                       <div className="mb-1 flex items-center gap-2">
@@ -3222,7 +3245,7 @@ export default function App() {
                           <span>{t('LOOKS TODAY', 'DAILY')}</span>
                           <span>{tryOnQuota.dailyRemaining ?? '—'} / {tryOnQuota.dailyLimit ?? 4} left</span>
                         </div>
-                        <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', background: 'rgba(0,0,0,0.1)' }}>
+                        <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', background: 'var(--clue-progress-track)' }}>
                           <div
                             className="h-full rounded-full transition-all duration-500"
                             style={{
@@ -3237,7 +3260,7 @@ export default function App() {
                           <span>{t('THIS MONTH', 'MONTHLY')}</span>
                           <span>{tryOnQuota.totalRemaining ?? '—'} / {tryOnQuota.totalLimit ?? 20} left</span>
                         </div>
-                        <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', background: 'rgba(0,0,0,0.1)' }}>
+                        <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', background: 'var(--clue-progress-track)' }}>
                           <div
                             className="h-full rounded-full transition-all duration-500"
                             style={{
@@ -3318,7 +3341,7 @@ export default function App() {
                       }
                       className="w-full py-3 px-4 rounded-full text-[var(--clue-inverse-text)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: 'var(--clue-gradient-ai-icon)',
                         fontSize: '11px',
                         fontWeight: 700,
                         letterSpacing: '0.1em',
@@ -3474,10 +3497,11 @@ export default function App() {
               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
               className="mb-16"
             >
-              <div className="max-w-[1200px] mx-auto p-8 md:p-12 rounded-3xl" style={{
-                background: 'rgba(255, 255, 255, 0.7)',
+              <div className="clue-surface-panel max-w-[1200px] mx-auto p-8 md:p-12 rounded-3xl" style={{
+                background: 'var(--clue-panel-bg)',
                 border: '3px solid var(--clue-border)',
-                boxShadow: 'var(--clue-shadow-hero)'
+                boxShadow: 'var(--clue-shadow-hero)',
+                color: 'var(--clue-text)',
               }}>
                 <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -3743,7 +3767,7 @@ export default function App() {
               </div>
 
               <div className="p-8 rounded-3xl aspect-square relative overflow-hidden" style={{
-                background: 'rgba(255, 255, 255, 0.7)',
+                background: 'var(--clue-panel-bg)',
                 border: '3px solid var(--clue-border)',
                 boxShadow: 'var(--clue-shadow-lg)'
               }}>
@@ -3826,11 +3850,12 @@ export default function App() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-12%' }}
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="p-10 md:p-16 rounded-3xl text-center"
+              className="clue-surface-panel p-10 md:p-16 rounded-3xl text-center"
               style={{
-                background: 'rgba(255, 255, 255, 0.7)',
+                background: 'var(--clue-panel-bg)',
                 border: '3px solid var(--clue-border)',
-                boxShadow: 'var(--clue-shadow-hero)'
+                boxShadow: 'var(--clue-shadow-hero)',
+                color: 'var(--clue-text)',
               }}
             >
               <span className="inline-block px-4 py-2 rounded-full mb-6" style={{
@@ -3960,7 +3985,7 @@ export default function App() {
             <br />
             CLUELESS AGAIN
           </h2>
-          <p className={`max-w-[32rem] mx-auto text-pretty ${isLoggedIn ? 'mb-12' : 'mb-6 md:mb-8'}`} style={{ fontSize: '16px', lineHeight: 1.75, fontWeight: 500, color: isLoggedIn ? undefined : 'var(--clue-text-muted)' }}>
+          <p className={`max-w-[32rem] mx-auto text-pretty ${isLoggedIn ? 'mb-12' : 'mb-6 md:mb-8'}`} style={{ fontSize: '16px', lineHeight: 1.75, fontWeight: 500, color: 'var(--clue-text-muted)' }}>
             {isLoggedIn ? (
               <>Join thousands making the most of what they already own. Start building your digital wardrobe today.</>
             ) : (
@@ -4009,7 +4034,7 @@ export default function App() {
             onClick={() => setShowChat(true)}
             className="fixed bottom-8 right-8 z-[60] w-16 h-16 rounded-full flex items-center justify-center shadow-[0_10px_40px_rgba(0,0,0,0.2)] transition-shadow duration-200 ease-out"
             style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'var(--clue-gradient-ai-icon)',
               color: 'var(--clue-pro-text)',
               border: '3px solid var(--clue-border)'
             }}

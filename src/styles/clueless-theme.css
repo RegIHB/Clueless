@@ -29,8 +29,24 @@
   --clue-pro-text: #ffffff;
   --clue-focus: #000000;
   --clue-danger: #ef4444;
+  --clue-danger-surface: #fde8e8;
   --clue-overlay: rgba(0, 0, 0, 0.7);
   --clue-dialog-ring: #ffffff;
+  --clue-panel-bg: rgba(255, 255, 255, 0.78);
+  --clue-panel-bg-soft: rgba(255, 255, 255, 0.6);
+  --clue-card-bg: #ffe5c8;
+  --clue-card-bg-alt: rgba(255, 255, 255, 0.85);
+  --clue-btn-secondary-bg: rgba(255, 255, 255, 0.82);
+  --clue-gradient-warm: linear-gradient(135deg, #ffe5c8 0%, #ffd4b8 100%);
+  --clue-gradient-ai-feature: linear-gradient(
+    135deg,
+    rgba(102, 126, 234, 0.12) 0%,
+    rgba(118, 75, 162, 0.12) 100%
+  );
+  --clue-gradient-ai-icon: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --clue-progress-track: rgba(0, 0, 0, 0.1);
+  --clue-shadow-button: 0 10px 28px rgba(0, 0, 0, 0.22);
+  --clue-shadow-button-soft: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 .dark {
@@ -62,8 +78,24 @@
   --clue-pro-text: #121018;
   --clue-focus: #f7f2f4;
   --clue-danger: #f87171;
+  --clue-danger-surface: #3d2228;
   --clue-overlay: rgba(0, 0, 0, 0.82);
   --clue-dialog-ring: rgba(255, 255, 255, 0.92);
+  --clue-panel-bg: rgba(28, 24, 36, 0.94);
+  --clue-panel-bg-soft: rgba(24, 21, 32, 0.82);
+  --clue-card-bg: #2d2434;
+  --clue-card-bg-alt: #322838;
+  --clue-btn-secondary-bg: rgba(255, 255, 255, 0.14);
+  --clue-gradient-warm: linear-gradient(135deg, #3a2c34 0%, #2d2434 100%);
+  --clue-gradient-ai-feature: linear-gradient(
+    135deg,
+    rgba(102, 126, 234, 0.28) 0%,
+    rgba(118, 75, 162, 0.22) 100%
+  );
+  --clue-gradient-ai-icon: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --clue-progress-track: rgba(255, 255, 255, 0.14);
+  --clue-shadow-button: 0 10px 28px rgba(0, 0, 0, 0.5);
+  --clue-shadow-button-soft: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .clueless-app {
@@ -78,4 +110,21 @@
 
 .dark .clueless-app :where(select, textarea, input:not([type='checkbox']):not([type='radio'])) {
   color-scheme: dark;
+}
+
+/* Panels/cards: always pair surface token with readable text */
+.clueless-app :where(.clue-surface-panel, .clue-surface-card) {
+  color: var(--clue-text);
+}
+
+.clueless-app :where(.clue-surface-panel, .clue-surface-card) :where(p, h3, h4, span, li) {
+  color: inherit;
+}
+
+.clueless-app .clue-muted {
+  color: var(--clue-text-muted);
+}
+
+.clueless-app .clue-subtle {
+  color: var(--clue-text-subtle);
 }
